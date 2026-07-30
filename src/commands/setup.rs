@@ -98,7 +98,11 @@ fn install_completions(shell: &str) -> Result<String, String> {
             Ok(path.to_string_lossy().to_string())
         }
         "fish" => {
-            let path = dir.join("proto.fish");
+            let fish_dir = dirs::home_dir()
+                .unwrap_or_default()
+                .join(".config/fish/completions");
+            std::fs::create_dir_all(&fish_dir).map_err(|e| format!("Cannot create dir: {}", e))?;
+            let path = fish_dir.join("proto.fish");
             let script = generate_fish_completion();
             std::fs::write(&path, script).map_err(|e| format!("Cannot write: {}", e))?;
             Ok(path.to_string_lossy().to_string())

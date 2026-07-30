@@ -1,0 +1,348 @@
+use clap::Subcommand;
+use owo_colors::OwoColorize;
+use serde::Deserialize;
+use crate::style;
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum McAction {
+    #[command(name = "resource_pack", about = "Minecraft resource pack utilities")]
+    ResourcePack {
+        #[command(subcommand)]
+        action: ResourcePackAction,
+    },
+    #[command(name = "server", about = "Minecraft server management")]
+    Server {
+        #[command(subcommand)]
+        action: crate::commands::mc_server::ServerAction,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ResourcePackAction {
+    #[command(about = "Create a new resource pack")]
+    Create {
+        #[arg(long, default_value = "1.21.1", value_name = "VERSION")]
+        version: String,
+        #[arg(long, default_value = "Resource Pack", value_name = "NAME")]
+        name: String,
+        #[arg(long, default_value = "true", value_name = "BOOL", action = clap::ArgAction::Set, value_parser = clap::value_parser!(bool))]
+        clean: bool,
+    },
+    #[command(about = "Fetch available Minecraft versions and stats")]
+    Fetch,
+    #[command(about = "Pack current folder into a resource pack zip")]
+    Pack {
+        #[arg(long, default_value = "true", value_name = "BOOL", action = clap::ArgAction::Set, value_parser = clap::value_parser!(bool))]
+        branding: bool,
+    },
+}
+
+#[derive(Deserialize)]
+struct VersionManifest {
+    versions: Vec<VersionEntry>,
+}
+
+#[derive(Deserialize)]
+struct VersionEntry {
+    id: String,
+    #[serde(rename = "type")]
+    release_type: String,
+    #[serde(rename = "releaseTime")]
+    release_time: String,
+    url: String,
+}
+
+#[derive(Deserialize)]
+struct VersionInfo {
+    downloads: Option<Downloads>,
+    asset_index: Option<AssetIndex>,
+}
+
+#[derive(Deserialize)]
+struct Downloads {
+    client: Option<ClientDownload>,
+}
+
+#[derive(Deserialize)]
+struct ClientDownload {
+    url: String,
+    size: u64,
+}
+
+#[derive(Deserialize)]
+struct AssetIndex {
+    url: String,
+}
+
+pub fn run(action: &McAction) {
+    match action {
+        McAction::ResourcePack { action } => resource_pack(action),
+        McAction::Server { action } => crate::commands::mc_server::run(action),
+    }
+}
+
+fn resource_pack(action: &ResourcePackAction) {
+    match action {
+        ResourcePackAction::Create { version, name, clean } => create(version, name, *clean),
+        ResourcePackAction::Fetch => fetch(),
+        ResourcePackAction::Pack { branding } => pack(*branding),
+    }
+}
+
+fn create(version: &str, name: &str, clean: bool) {
+    let folder_name = name.replace(' ', "_").to_lowercase();
+    let path = std::path::PathBuf::from(&folder_name);
+
+    if path.exists() {
+        eprintln!("{} Directory '{}' already exists.", style::error(""), folder_name);
+        return;
+    }
+
+    let sp = style::Spinner::new(&format!("Creating resource pack '{}'...", name));
+
+    if let Err(e) = std::fs::create_dir_all(&path) {
+        sp.fail(&format!("Failed: {}", e));
+        return;
+    }
+
+    write_pack_mcmeta(&path, name);
+
+    if !clean {
+        sp.update("Fetching version manifest...");
+        download_assets(&path, version, &sp);
+    }
+
+    sp.done(&format!("Created '{}' (Minecraft {})", name, version));
+
+    println!();
+    println!("{}", style::success(&format!("Resource pack '{}' ready!", name)));
+    println!("  {}", format!("cd {}", folder_name).style(style::Theme::MUTED));
+    println!("  {}", "proto mc resource_pack pack".style(style::Theme::MUTED));
+}
+
+fn write_pack_mcmeta(path: &std::path::Path, name: &str) {
+    let mcmeta = format!(
+        r#"{{"pack":{{"pack_format":0,"description":"{}"}}}}"#,
+        name
+    );
+    std::fs::write(path.join("pack.mcmeta"), mcmeta).unwrap();
+}
+
+fn download_assets(path: &std::path::Path, version: &str, sp: &style::Spinner) {
+    let vm = fetch_version_manifest();
+    let entry = vm.versions.iter().find(|v| v.id == version);
+    let entry = match entry {
+        Some(e) => e,
+        None => {
+            sp.fail(&format!("Version '{}' not found. Use 'fetch' to see available versions.", version));
+            std::process::exit(1);
+        }
+    };
+
+    sp.update(&format!("Fetching version info for {}...", version));
+    let info = fetch_json::<VersionInfo>(&entry.url);
+    let client_url = info.downloads
+        .and_then(|d| d.client)
+        .map(|c| c.url);
+
+    let client_url = match client_url {
+        Some(u) => u,
+        None => {
+            sp.fail("No client download found for this version.");
+            return;
+        }
+    };
+
+    let temp_dir = std::env::temp_dir().join(format!("proto_mc_{}", std::process::id()));
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    let jar_path = temp_dir.join("client.jar");
+
+    sp.update(&format!("Downloading client.jar ({:.1} MB)...", 0.0));
+    download_file(&client_url, &jar_path, sp);
+
+    sp.update("Extracting assets from client.jar...");
+    extract_assets(&jar_path, path, sp);
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+fn fetch() {
+    use crate::style;
+
+    let sp = style::Spinner::new("Fetching version manifest...");
+    let vm = fetch_version_manifest();
+    sp.done("Fetched version manifest");
+
+    let release_count = vm.versions.iter().filter(|v| v.release_type == "release").count();
+    let snapshot_count = vm.versions.iter().filter(|v| v.release_type == "snapshot").count();
+
+    println!("\n{}", "Minecraft Versions".style(style::Theme::HEADER));
+    println!("{}", style::label_value("Releases", &release_count.to_string()));
+    println!("{}", style::label_value("Snapshots", &snapshot_count.to_string()));
+    println!("{}", style::label_value("Total", &vm.versions.len().to_string()));
+    println!("{}", style::label_value("Latest release", &vm.versions.iter().find(|v| v.release_type == "release").map(|v| v.id.as_str()).unwrap_or("N/A")));
+    println!("{}", style::label_value("Latest snapshot", &vm.versions.iter().find(|v| v.release_type == "snapshot").map(|v| v.id.as_str()).unwrap_or("N/A")));
+
+    println!("\n{}", "Recent Versions".style(style::Theme::HEADER));
+    println!("{}", style::divider());
+
+    for v in vm.versions.iter().take(15) {
+        let type_icon = match v.release_type.as_str() {
+            "release" => "●".green().to_string(),
+            "snapshot" => "◉".yellow().to_string(),
+            _ => "○".dimmed().to_string(),
+        };
+        let date = &v.release_time[..10.min(v.release_time.len())];
+        println!(
+            "  {} {:16} {}",
+            type_icon,
+            v.id.style(style::Theme::ACCENT),
+            date.dimmed().to_string()
+        );
+    }
+
+    println!("{}", style::divider());
+    println!("\n{}", "--clean false  to download full assets for a version".style(style::Theme::MUTED));
+}
+
+fn pack(branding: bool) {
+    use crate::style;
+
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let mcmeta = cwd.join("pack.mcmeta");
+
+    if !mcmeta.exists() {
+        eprintln!("{} No pack.mcmeta found. Run this inside a resource pack folder.", style::error(""));
+        return;
+    }
+
+    let folder_name = cwd.file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "resource_pack".to_string());
+
+    let zip_name = format!("{}.zip", folder_name);
+    let sp = style::Spinner::new(&format!("Packing '{}'...", folder_name));
+
+    if branding {
+        sp.update("Adding proto branding...");
+        add_branding(&mcmeta);
+    }
+
+    let output_path = cwd.parent().unwrap_or(&cwd).join(&zip_name);
+    let _ = std::fs::remove_file(&output_path);
+
+    sp.update("Creating archive...");
+    let status = std::process::Command::new("zip")
+        .arg("-r")
+        .arg("-q")
+        .arg(output_path.to_string_lossy().as_ref())
+        .arg(".")
+        .arg("-x")
+        .arg(&zip_name)
+        .arg("-x")
+        .arg("*.zip")
+        .current_dir(&cwd)
+        .status();
+
+    match status {
+        Ok(s) if s.success() => {
+            sp.done(&format!("Packed: {}", output_path.to_string_lossy()));
+            println!("{}", style::success("Resource pack ready to import!"));
+        }
+        _ => {
+            sp.fail("zip command failed. Is 'zip' installed?");
+        }
+    }
+}
+
+fn add_branding(mcmeta: &std::path::Path) {
+    let content = std::fs::read_to_string(mcmeta).unwrap_or_default();
+    if let Ok(mut val) = serde_json::from_str::<serde_json::Value>(&content) {
+        if let Some(pack) = val.get_mut("pack") {
+            if let Some(desc) = pack.get("description").and_then(|d| d.as_str()) {
+                let branded = format!("{}  |  Made with Proto CLI ✦", desc);
+                if let Some(obj) = pack.as_object_mut() {
+                    obj.insert("description".into(), serde_json::Value::String(branded));
+                }
+            }
+        }
+        let branded_json = serde_json::to_string_pretty(&val).unwrap_or(content);
+        let _ = std::fs::write(mcmeta, branded_json);
+    }
+}
+
+fn fetch_version_manifest() -> VersionManifest {
+    let url = "https://piston-meta.mojang.com/mc/game/version_manifest.json";
+    let resp = ureq::get(url)
+        .set("User-Agent", "ProtoCLI/0.1.0")
+        .call()
+        .expect("Failed to fetch version manifest");
+    resp.into_json::<VersionManifest>()
+        .expect("Failed to parse version manifest")
+}
+
+fn fetch_json<T: serde::de::DeserializeOwned>(url: &str) -> T {
+    let resp = ureq::get(url)
+        .set("User-Agent", "ProtoCLI/0.1.0")
+        .call()
+        .unwrap_or_else(|e| panic!("Failed to fetch {}: {}", url, e));
+    resp.into_json::<T>()
+        .unwrap_or_else(|e| panic!("Failed to parse JSON from {}: {}", url, e))
+}
+
+fn download_file(url: &str, dest: &std::path::Path, sp: &style::Spinner) {
+    let resp = ureq::get(url)
+        .set("User-Agent", "ProtoCLI/0.1.0")
+        .call()
+        .expect("Failed to download file");
+
+    let total = resp.header("Content-Length")
+        .and_then(|s| s.parse::<u64>().ok());
+
+    let mut reader = resp.into_reader();
+    let mut file = std::fs::File::create(dest).expect("Failed to create temp file");
+
+    let mut buf = [0u8; 8192];
+    let mut downloaded: u64 = 0;
+
+    loop {
+        let n = std::io::Read::read(&mut reader, &mut buf).expect("Read error");
+        if n == 0 { break; }
+        std::io::Write::write_all(&mut file, &buf[..n]).expect("Write error");
+        downloaded += n as u64;
+        if let Some(t) = total {
+            sp.update(&format!("Downloading client.jar ({:.1} / {:.1} MB)...",
+                downloaded as f64 / 1_048_576.0,
+                t as f64 / 1_048_576.0));
+        }
+    }
+}
+
+fn extract_assets(jar_path: &std::path::Path, dest: &std::path::Path, sp: &style::Spinner) {
+    let file = std::fs::File::open(jar_path).expect("Failed to open client.jar");
+    let mut archive = zip::ZipArchive::new(file).expect("Failed to read client.jar as zip");
+
+    let assets_prefix = "assets/minecraft/";
+    let assets_base = dest.join("assets").join("minecraft");
+    std::fs::create_dir_all(&assets_base).unwrap();
+
+    let mut count = 0u64;
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i).unwrap();
+        let name = entry.name().to_string();
+        if name.starts_with(assets_prefix) && !entry.is_dir() {
+            let relative = name.strip_prefix(assets_prefix).unwrap();
+            let out_path = assets_base.join(relative);
+            if let Some(parent) = out_path.parent() {
+                std::fs::create_dir_all(parent).unwrap();
+            }
+            let mut out = std::fs::File::create(&out_path).unwrap();
+            std::io::copy(&mut entry, &mut out).unwrap();
+            count += 1;
+            if count % 50 == 0 {
+                sp.update(&format!("Extracting assets... ({} files)", count));
+            }
+        }
+    }
+    sp.update(&format!("Extracted {} asset files", count));
+}

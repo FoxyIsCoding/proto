@@ -34,6 +34,7 @@ fn print_general_help() {
     print_cmd("pkg", "<action>", "Cross-distro package manager wrapper");
     print_cmd("git", "<action>", "Git workflow enhancements");
     print_cmd("setup", "", "Interactive configuration wizard");
+    print_cmd("mc", "resource_pack|server", "Minecraft resource packs & servers");
 
     println!("\n{}", "FLAGS:".style(style::Theme::HEADER));
     print_cmd("--version", "", "Print version and exit");
@@ -93,6 +94,22 @@ fn print_command_help(command: &str) {
             println!("{}", "CONFIGURES:".style(style::Theme::HEADER));
             println!("  Default package manager, color preferences,");
             println!("  shell completions, and more.");
+        }
+        "mc" => {
+            println!("{}", "proto mc".style(style::Theme::HEADER));
+            println!("  Minecraft utilities.\n");
+            println!("{}", "RESOURCE PACK:".style(style::Theme::HEADER));
+            println!("  proto mc resource_pack create    Create a new resource pack");
+            println!("  proto mc resource_pack fetch     List Minecraft versions + stats");
+            println!("  proto mc resource_pack pack      Pack folder into a .zip\n");
+            println!("{}", "SERVER:".style(style::Theme::HEADER));
+            println!("  proto mc server create           Interactive server setup wizard");
+            println!("  proto mc server ping <ip[:port]> Check if a server is online");
+            println!("  proto mc server status <ip[:port]> Detailed server info + players\n");
+            println!("{}", "CREATE OPTIONS:".style(style::Theme::HEADER));
+            println!("  --version VERSION   MC version (default: 1.21.1)");
+            println!("  --name NAME         Pack name (default: Resource Pack)");
+            println!("  --clean BOOL        Bare bones only (default: true)");
         }
         other => {
             println!("{} Unknown command: '{}'", style::error(""), other.style(style::Theme::ACCENT));

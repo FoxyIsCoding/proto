@@ -80,11 +80,11 @@ impl Spinner {
         self.spinner.set_message(msg.to_string());
     }
 
-    pub fn done(self, msg: &str) {
+    pub fn done(&self, msg: &str) {
         self.spinner.finish_with_message(msg.to_string());
     }
 
-    pub fn fail(self, msg: &str) {
+    pub fn fail(&self, msg: &str) {
         self.spinner.finish_with_message(
             format!("{} {}", "✗".style(Theme::ERROR), msg.style(Theme::ERROR))
         );
@@ -93,15 +93,14 @@ impl Spinner {
 
 pub fn proto_banner() -> String {
     format!(
-        "{}\n{}",
-        r"
-      /‾‾‾‾‾‾/".bright_cyan(),
-        r"     /  ◈ ◈  /
-    /  ▔▔▔▔  /
-   /________/
-   | □  □  |
-   |   ▼   |
-   |_______|".cyan()
+        "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+        "    ⣀⡀".cyan(),
+        "⢠⣤⡀⣾⣿⣿⠀⣤⣤⡄".cyan(),
+        "⢿⣿⡇⠘⠛⠁⢸⣿⣿⠃".cyan(),
+        "⠈⣉⣤⣾⣿⣿⡆⠉⣴⣶⣶".cyan(),
+        "⣾⣿⣿⣿⣿⣿⣿⡀⠻⠟⠃".cyan(),
+        "⠙⠛⠻⢿⣿⣿⣿⡇".cyan(),
+        "    ⠈⠙⠋⠁".cyan(),
     )
 }
 

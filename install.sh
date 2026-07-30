@@ -9,31 +9,18 @@ GREEN="\033[0;32m"
 YELLOW="\033[1;33m"
 RED="\033[0;31m"
 NC="\033[0m"
+DIV="──────────────────────────────────────────"
 
 PROTO_VERSION="0.1.0"
 BIN_NAME="proto"
 DEFAULT_INSTALL_DIR="$HOME/.local/bin"
 SYSTEM_INSTALL_DIR="/usr/local/bin"
 
-echo ""
-echo -e "${CYAN}      /‾‾‾‾‾‾/${NC}"
-echo -e "${CYAN}     /  ◈ ◈  /${NC}"
-echo -e "${CYAN}    /  ▔▔▔▔  /${NC}"
-echo -e "${CYAN}   /________/${NC}"
-echo -e "${CYAN}   | □  □  |${NC}"
-echo -e "${CYAN}   |   ▼   |${NC}"
-echo -e "${CYAN}   |_______|${NC}"
-echo ""
-echo -e "${BOLD}${CYAN}  Proto CLI ${WHITE}v${PROTO_VERSION}${NC}"
-echo -e "  ${BLUE}Your friendly protogen CLI companion${NC}"
-echo ""
-echo -e "  ${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
-
-info()  { echo -e "${CYAN}  ◆${NC} $1"; }
+info()    { echo -e "${CYAN}  ◆${NC} $1"; }
 success() { echo -e "${GREEN}  ✔${NC} $1"; }
-warn()  { echo -e "${YELLOW}  ⚠${NC}  $1"; }
-err()   { echo -e "${RED}  ✗${NC} $1"; }
+warn()    { echo -e "${YELLOW}  ⚠${NC}  $1"; }
+err()     { echo -e "${RED}  ✗${NC} $1"; }
+sep()     { echo -e "\n  ${BLUE}${DIV}${NC}\n"; }
 
 check_rust() {
     if command -v cargo &>/dev/null; then
@@ -42,15 +29,13 @@ check_rust() {
     fi
 
     warn "Rust is not installed."
-    echo ""
     read -r -p "  Install Rust via rustup? [Y/n] " answer
     answer="${answer:-Y}"
-
     if [[ "$answer" =~ ^[Yy]$ ]]; then
         info "Installing Rust..."
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
         source "$HOME/.cargo/env"
-        success "Rust installed successfully!"
+        success "Rust installed"
     else
         err "Rust is required to build Proto CLI."
         exit 1
@@ -58,26 +43,23 @@ check_rust() {
 }
 
 build_proto() {
-    info "Building Proto CLI (this may take a moment)..."
+    info "Building Proto CLI..."
     cargo build --release 2>&1 | while IFS= read -r line; do
         if [[ "$line" =~ "Compiling" || "$line" =~ "Building" ]]; then
             echo -e "  ${BLUE}▸${NC} ${line}" >&2
         fi
     done
-
     if [[ ! -f "target/release/$BIN_NAME" ]]; then
-        err "Build failed. Check the output above for errors."
+        err "Build failed."
         exit 1
     fi
-    success "Build complete!"
+    success "Build complete"
 }
 
 install_binary() {
-    echo ""
     info "Where should Proto be installed?"
-    echo "  1) ${DEFAULT_INSTALL_DIR} (user only, no sudo required)"
-    echo "  2) ${SYSTEM_INSTALL_DIR} (system-wide, requires sudo)"
-    echo ""
+    echo "  1) ${DEFAULT_INSTALL_DIR}  (user only, no sudo)"
+    echo "  2) ${SYSTEM_INSTALL_DIR}   (system-wide, needs sudo)"
     read -r -p "  Choice [1-2] (default: 1): " choice
     choice="${choice:-1}"
 
@@ -90,7 +72,7 @@ install_binary() {
     mkdir -p "$INSTALL_DIR"
 
     if [[ "$INSTALL_DIR" == "/usr/local/bin" ]]; then
-        info "Installing system-wide (sudo required)..."
+        info "Installing system-wide..."
         sudo cp "target/release/$BIN_NAME" "$INSTALL_DIR/"
         sudo chmod +x "$INSTALL_DIR/$BIN_NAME"
     else
@@ -98,96 +80,196 @@ install_binary() {
         cp "target/release/$BIN_NAME" "$INSTALL_DIR/"
         chmod +x "$INSTALL_DIR/$BIN_NAME"
     fi
-
-    success "Proto installed to $INSTALL_DIR/$BIN_NAME"
+    success "Installed: $INSTALL_DIR/$BIN_NAME"
 
     if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
         warn "$INSTALL_DIR is not in your PATH."
-        echo ""
-        echo "  Add this to your shell config (~/.bashrc, ~/.zshrc, etc.):"
-        echo ""
+        echo "  Add to your shell config:"
         echo -e "    ${CYAN}export PATH=\"\$PATH:$INSTALL_DIR\"${NC}"
-        echo ""
     fi
 }
 
 setup_completions() {
-    echo ""
     read -r -p "  Install shell completions? [Y/n] " answer
     answer="${answer:-Y}"
-
-    if [[ ! "$answer" =~ ^[Yy]$ ]]; then
-        return
-    fi
+    [[ "$answer" =~ ^[Yy]$ ]] || return
 
     local shell
     shell="$(basename "$SHELL")"
 
-    local completions_dir="$HOME/.local/share/proto/completions"
-    mkdir -p "$completions_dir"
-
     info "Generating completions for $shell..."
-
-    "$INSTALL_DIR/$BIN_NAME" completions "$shell" > "$completions_dir/proto.$shell" 2>/dev/null || {
-        warn "Auto-generation failed. You can manually set up completions later."
-        return
-    }
-
-    success "Completions installed to $completions_dir"
 
     case "$shell" in
         bash)
+            write_bash_completion
             echo "  Add to ~/.bashrc:"
-            echo -e "    ${CYAN}[ -f $completions_dir/proto.bash ] && source $completions_dir/proto.bash${NC}"
+            echo -e "    ${CYAN}source ~/.local/share/proto/completions/proto.bash${NC}"
             ;;
         zsh)
+            write_zsh_completion
             echo "  Add to ~/.zshrc:"
-            echo -e "    ${CYAN}fpath=($completions_dir \$fpath)${NC}"
+            echo -e "    ${CYAN}fpath=(~/.local/share/proto/completions \$fpath)${NC}"
             ;;
         fish)
-            echo "  Symlink to completions:"
-            echo -e "    ${CYAN}ln -s $completions_dir/proto.fish ~/.config/fish/completions/${NC}"
+            write_fish_completion
+            echo "  Restart your shell for completions to take effect."
+            ;;                                                                                                                                                                                  
+        *)
+            warn "Unsupported shell: $shell"
+            return
             ;;
     esac
-    echo ""
+    success "Completions installed"
+}
+
+write_bash_completion() {
+    local dir="$HOME/.local/share/proto/completions"
+    mkdir -p "$dir"
+    cat > "$dir/proto.bash" << 'BASH_EOF'
+_proto_completion() {
+    local cur prev
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    case "${prev}" in
+        proto)
+            COMPREPLY=( $(compgen -W "help system pkg git setup" -- "${cur}") )
+            return 0 ;;
+        pkg)
+            COMPREPLY=( $(compgen -W "install search remove update list" -- "${cur}") )
+            return 0 ;;
+        git)
+            COMPREPLY=( $(compgen -W "log stats save undo branch" -- "${cur}") )
+            return 0 ;;
+        help)
+            COMPREPLY=( $(compgen -W "help system pkg git setup" -- "${cur}") )
+            return 0 ;;
+    esac
+}
+complete -F _proto_completion proto
+BASH_EOF
+}
+
+write_zsh_completion() {
+    local dir="$HOME/.local/share/proto/completions"
+    mkdir -p "$dir"
+    cat > "$dir/_proto" << 'ZSH_EOF'
+#compdef proto
+
+_proto() {
+    local -a commands
+    commands=(
+        'help:Show help for commands'
+        'system:Display system information'
+        'pkg:Cross-distro package manager wrapper'
+        'git:Git workflow enhancements'
+        'setup:Interactive configuration wizard'
+    )
+    local -a pkg_actions
+    pkg_actions=(
+        'install:Install packages'
+        'search:Search packages'
+        'remove:Remove packages'
+        'update:Update packages'
+        'list:List installed packages'
+    )
+    local -a git_actions
+    git_actions=(
+        'log:Show pretty git log'
+        'stats:Show repo statistics'
+        'save:Quick WIP commit'
+        'undo:Undo last commit'
+        'branch:Show branches'
+    )
+    _arguments -C \
+        '--version[Print version]' \
+        '--help[Print help]' \
+        '1: :_describe command commands' \
+        '*::arg:->args'
+    case "$state" in
+        args)
+            case $words[1] in
+                pkg) _describe -t actions 'pkg action' pkg_actions ;;
+                git) _describe -t actions 'git action' git_actions ;;
+            esac ;;
+    esac
+}
+_proto "$@"
+ZSH_EOF
+}
+
+write_fish_completion() {
+    local dir="$HOME/.config/fish/completions"
+    mkdir -p "$dir"
+    cat > "$dir/$BIN_NAME.fish" << 'FISH_EOF'
+complete -c proto -f
+complete -c proto -n "__fish_use_subcommand" -a help -d "Show help"
+complete -c proto -n "__fish_use_subcommand" -a system -d "System information"
+complete -c proto -n "__fish_use_subcommand" -a pkg -d "Package manager wrapper"
+complete -c proto -n "__fish_use_subcommand" -a git -d "Git enhancements"
+complete -c proto -n "__fish_use_subcommand" -a setup -d "Configuration wizard"
+
+complete -c proto -n "__fish_seen_subcommand_from pkg" -a install -d "Install packages"
+complete -c proto -n "__fish_seen_subcommand_from pkg" -a search -d "Search packages"
+complete -c proto -n "__fish_seen_subcommand_from pkg" -a remove -d "Remove packages"
+complete -c proto -n "__fish_seen_subcommand_from pkg" -a update -d "Update packages"
+complete -c proto -n "__fish_seen_subcommand_from pkg" -a list -d "List packages"
+
+complete -c proto -n "__fish_seen_subcommand_from git" -a log -d "Pretty git log"
+complete -c proto -n "__fish_seen_subcommand_from git" -a stats -d "Repo statistics"
+complete -c proto -n "__fish_seen_subcommand_from git" -a save -d "Quick WIP commit"
+complete -c proto -n "__fish_seen_subcommand_from git" -a undo -d "Undo last commit"
+complete -c proto -n "__fish_seen_subcommand_from git" -a branch -d "Show branches"
+
+complete -c proto -l version -d "Print version"
+complete -c proto -l help -d "Print help"
+FISH_EOF
 }
 
 run_setup() {
-    echo ""
     read -r -p "  Run interactive setup wizard? [Y/n] " answer
     answer="${answer:-Y}"
-
-    if [[ "$answer" =~ ^[Yy]$ ]]; then
-        "$INSTALL_DIR/$BIN_NAME" setup
-    fi
+    [[ "$answer" =~ ^[Yy]$ ]] && "$INSTALL_DIR/$BIN_NAME" setup
 }
 
 main() {
     echo ""
+    echo -e "${CYAN}    ⣀⡀    ${NC}"
+    echo -e "${CYAN}⢠⣤⡀⣾⣿⣿⠀⣤⣤⡄${NC}"
+    echo -e "${CYAN}⢿⣿⡇⠘⠛⠁⢸⣿⣿⠃${NC}"
+    echo -e "${CYAN}⠈⣉⣤⣾⣿⣿⡆⠉⣴⣶⣶${NC}"
+    echo -e "${CYAN}⣾⣿⣿⣿⣿⣿⣿⡀⠻⠟⠃${NC}"
+    echo -e "${CYAN}⠙⠛⠻⢿⣿⣿⣿⡇  ${NC}"
+    echo -e "${CYAN}    ⠈⠙⠋⠁  ${NC}"
+    echo ""
+    echo -e "${BOLD}${CYAN}Proto CLI ${WHITE}v${PROTO_VERSION}${NC}"
+    echo -e "${BLUE}Your friendly protogen CLI companion${NC}"
 
+    sep
     check_rust
 
+    sep
     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
     cd "$SCRIPT_DIR"
-
     build_proto
+
+    sep
     install_binary
+
+    sep
     setup_completions
+
+    sep
     run_setup
 
+    sep
+    echo -e "  ${GREEN}✦ Proto CLI installed successfully ✦${NC}"
     echo ""
-    echo -e "  ${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    echo -e "  ${GREEN}✦ Proto CLI installed successfully! ✦${NC}"
-    echo ""
-    echo "  Get started:"
-    echo -e "    ${CYAN}proto help${NC}       Show all commands"
-    echo -e "    ${CYAN}proto system${NC}     View system information"
-    echo -e "    ${CYAN}proto pkg install${NC} Install packages"
-    echo -e "    ${CYAN}proto git log${NC}     Pretty git history"
-    echo ""
-    echo -e "  ${BLUE}Enjoy! 🦊${NC}"
+    echo "        proto help       Show all commands"
+    echo "        proto system     View system information"
+    echo "        proto pkg install Install packages"
+    echo "        proto git log     Pretty git history"
     echo ""
 }
-
 main "$@"

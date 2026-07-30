@@ -44,6 +44,11 @@ pub enum Commands {
     },
     #[command(about = "Interactive first-time configuration wizard")]
     Setup,
+    #[command(about = "Minecraft utilities (resource packs & servers)")]
+    Mc {
+        #[command(subcommand)]
+        action: commands::mc::McAction,
+    },
 }
 
 pub fn run(cli: Cli) {
@@ -68,6 +73,7 @@ pub fn run(cli: Cli) {
         Some(Commands::Pkg { action }) => commands::pkg::run(&action),
         Some(Commands::Git { action }) => commands::git::run(&action),
         Some(Commands::Setup) => commands::setup::run(),
+        Some(Commands::Mc { action }) => commands::mc::run(&action),
         None => {
             commands::help::run(&commands::help::HelpAction::All);
         }
