@@ -35,6 +35,13 @@ pub enum ResourcePackAction {
         #[arg(long, default_value = "true", value_name = "BOOL", action = clap::ArgAction::Set, value_parser = clap::value_parser!(bool))]
         branding: bool,
     },
+    #[command(about = "Add an item, block, or entity asset to the pack")]
+    Add {
+        #[arg(required = true, value_name = "CATEGORY")]
+        category: String,
+        #[arg(required = true, value_name = "NAME")]
+        name: String,
+    },
 }
 
 #[derive(Deserialize)]
@@ -86,6 +93,7 @@ fn resource_pack(action: &ResourcePackAction) {
         ResourcePackAction::Create { version, name, clean } => create(version, name, *clean),
         ResourcePackAction::Fetch => fetch(),
         ResourcePackAction::Pack { branding } => pack(*branding),
+        ResourcePackAction::Add { category, name } => add(category, name),
     }
 }
 
@@ -345,4 +353,204 @@ fn extract_assets(jar_path: &std::path::Path, dest: &std::path::Path, sp: &style
         }
     }
     sp.update(&format!("Extracted {} asset files", count));
+}
+
+const MINIMAL_PNG: &[u8] = &[
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+    0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+    0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+    0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+    0x54, 0x78, 0x9C, 0x62, 0x00, 0x00, 0x00, 0x02,
+    0x00, 0x01, 0xE5, 0x27, 0xDE, 0xFC, 0x00, 0x00,
+    0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42,
+    0x60, 0x82,
+];
+
+fn add(category: &str, name: &str) {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let mcmeta = cwd.join("pack.mcmeta");
+
+    if !mcmeta.exists() {
+        eprintln!("{} No pack.mcmeta found. Run this inside a resource pack folder.", style::error(""));
+        eprintln!("{} Create one with: {} {}", style::warn(""), "proto mc resource_pack create --name".style(style::Theme::ACCENT), "\"My Pack\"".style(style::Theme::ACCENT));
+        return;
+    }
+
+    let safe_name = name.to_lowercase().replace([' ', '-'], "_");
+    if safe_name.is_empty() {
+        eprintln!("{} Invalid name.", style::error(""));
+        return;
+    }
+
+    let sp = style::Spinner::new(&format!("Adding {} '{}'...", category, name));
+    let results = match category.to_lowercase().as_str() {
+        "item" => add_item(&cwd, &safe_name, &sp),
+        "block" => add_block(&cwd, &safe_name, &sp),
+        "entity" => add_entity(&cwd, &safe_name, &sp),
+        "armor" => add_armor(&cwd, &safe_name, &sp),
+        "armor_layer" | "armour_layer" => add_armor_layer(&cwd, &safe_name, &sp),
+        "gui" => add_gui(&cwd, &safe_name, &sp),
+        "particle" => add_particle(&cwd, &safe_name, &sp),
+        "environment" | "env" => add_environment(&cwd, &safe_name, &sp),
+        _ => {
+            sp.fail(&format!("Unknown category: '{}'", category));
+            eprintln!("\n{} Categories: item, block, entity, armor, armor_layer, gui, particle, environment", style::warn(""));
+            return;
+        }
+    };
+
+    match results {
+        Ok(files) => {
+            sp.done(&format!("Added {} '{}'", category, name));
+            println!();
+            for f in files {
+                println!("  {} {}", "✦".style(style::Theme::SUCCESS), f.style(style::Theme::MUTED));
+            }
+        }
+        Err(e) => {
+            sp.fail(&e);
+        }
+    }
+}
+
+fn add_item(root: &std::path::Path, name: &str, sp: &style::Spinner) -> Result<Vec<String>, String> {
+    let mut created = Vec::new();
+
+    let models_dir = root.join("assets/minecraft/models/item");
+    std::fs::create_dir_all(&models_dir).map_err(|e| format!("mkdir: {}", e))?;
+
+    let model = format!(
+        r#"{{"parent":"minecraft:item/generated","textures":{{"layer0":"minecraft:item/{}"}}}}"#,
+        name
+    );
+    let model_path = models_dir.join(format!("{}.json", name));
+    std::fs::write(&model_path, &model).map_err(|e| format!("write: {}", e))?;
+    created.push(format!("assets/minecraft/models/item/{}.json", name));
+
+    sp.update("Creating placeholder texture...");
+    let tex_dir = root.join("assets/minecraft/textures/item");
+    std::fs::create_dir_all(&tex_dir).map_err(|e| format!("mkdir: {}", e))?;
+    let tex_path = tex_dir.join(format!("{}.png", name));
+    if !tex_path.exists() {
+        std::fs::write(&tex_path, MINIMAL_PNG).map_err(|e| format!("write: {}", e))?;
+        created.push(format!("assets/minecraft/textures/item/{}.png", name));
+    }
+
+    Ok(created)
+}
+
+fn add_block(root: &std::path::Path, name: &str, sp: &style::Spinner) -> Result<Vec<String>, String> {
+    let mut created = Vec::new();
+
+    let models_dir = root.join("assets/minecraft/models/block");
+    std::fs::create_dir_all(&models_dir).map_err(|e| format!("mkdir: {}", e))?;
+
+    let model = format!(
+        r#"{{"parent":"minecraft:block/cube_all","textures":{{"all":"minecraft:block/{}"}}}}"#,
+        name
+    );
+    let model_path = models_dir.join(format!("{}.json", name));
+    std::fs::write(&model_path, &model).map_err(|e| format!("write: {}", e))?;
+    created.push(format!("assets/minecraft/models/block/{}.json", name));
+
+    let item_model = format!(
+        r#"{{"parent":"minecraft:block/{}"}}"#,
+        name
+    );
+    let item_dir = root.join("assets/minecraft/models/item");
+    std::fs::create_dir_all(&item_dir).map_err(|e| format!("mkdir: {}", e))?;
+    let item_path = item_dir.join(format!("{}.json", name));
+    std::fs::write(&item_path, &item_model).map_err(|e| format!("write: {}", e))?;
+    created.push(format!("assets/minecraft/models/item/{}.json", name));
+
+    let blockstates_dir = root.join("assets/minecraft/blockstates");
+    std::fs::create_dir_all(&blockstates_dir).map_err(|e| format!("mkdir: {}", e))?;
+    let bs = format!(
+        r#"{{"variants":{{"":{{"model":"minecraft:block/{}"}}}}}}"#,
+        name
+    );
+    let bs_path = blockstates_dir.join(format!("{}.json", name));
+    std::fs::write(&bs_path, bs).map_err(|e| format!("write: {}", e))?;
+    created.push(format!("assets/minecraft/blockstates/{}.json", name));
+
+    sp.update("Creating placeholder texture...");
+    let tex_dir = root.join("assets/minecraft/textures/block");
+    std::fs::create_dir_all(&tex_dir).map_err(|e| format!("mkdir: {}", e))?;
+    let tex_path = tex_dir.join(format!("{}.png", name));
+    if !tex_path.exists() {
+        std::fs::write(&tex_path, MINIMAL_PNG).map_err(|e| format!("write: {}", e))?;
+        created.push(format!("assets/minecraft/textures/block/{}.png", name));
+    }
+
+    Ok(created)
+}
+
+fn add_entity(root: &std::path::Path, name: &str, _sp: &style::Spinner) -> Result<Vec<String>, String> {
+    let mut created = Vec::new();
+    let tex_dir = root.join("assets/minecraft/textures/entity");
+    std::fs::create_dir_all(&tex_dir).map_err(|e| format!("mkdir: {}", e))?;
+    let tex_path = tex_dir.join(format!("{}.png", name));
+    if !tex_path.exists() {
+        std::fs::write(&tex_path, MINIMAL_PNG).map_err(|e| format!("write: {}", e))?;
+        created.push(format!("assets/minecraft/textures/entity/{}.png", name));
+    }
+    Ok(created)
+}
+
+fn add_armor(root: &std::path::Path, name: &str, _sp: &style::Spinner) -> Result<Vec<String>, String> {
+    let mut created = Vec::new();
+
+    let tex_dir = root.join("assets/minecraft/textures/models/armor");
+    std::fs::create_dir_all(&tex_dir).map_err(|e| format!("mkdir: {}", e))?;
+
+    for layer in &[1, 2] {
+        let fname = format!("{}_layer_{}.png", name, layer);
+        let tex_path = tex_dir.join(&fname);
+        if !tex_path.exists() {
+            std::fs::write(&tex_path, MINIMAL_PNG).map_err(|e| format!("write: {}", e))?;
+            created.push(format!("assets/minecraft/textures/models/armor/{}", fname));
+        }
+    }
+    Ok(created)
+}
+
+fn add_armor_layer(root: &std::path::Path, name: &str, _sp: &style::Spinner) -> Result<Vec<String>, String> {
+    let tex_dir = root.join("assets/minecraft/textures/models/armor");
+    std::fs::create_dir_all(&tex_dir).map_err(|e| format!("mkdir: {}", e))?;
+    let tex_path = tex_dir.join(format!("{}.png", name));
+    if !tex_path.exists() {
+        std::fs::write(&tex_path, MINIMAL_PNG).map_err(|e| format!("write: {}", e))?;
+    }
+    Ok(vec![format!("assets/minecraft/textures/models/armor/{}.png", name)])
+}
+
+fn add_gui(root: &std::path::Path, name: &str, _sp: &style::Spinner) -> Result<Vec<String>, String> {
+    let tex_dir = root.join("assets/minecraft/textures/gui");
+    std::fs::create_dir_all(&tex_dir).map_err(|e| format!("mkdir: {}", e))?;
+    let tex_path = tex_dir.join(format!("{}.png", name));
+    if !tex_path.exists() {
+        std::fs::write(&tex_path, MINIMAL_PNG).map_err(|e| format!("write: {}", e))?;
+    }
+    Ok(vec![format!("assets/minecraft/textures/gui/{}.png", name)])
+}
+
+fn add_particle(root: &std::path::Path, name: &str, _sp: &style::Spinner) -> Result<Vec<String>, String> {
+    let tex_dir = root.join("assets/minecraft/textures/particle");
+    std::fs::create_dir_all(&tex_dir).map_err(|e| format!("mkdir: {}", e))?;
+    let tex_path = tex_dir.join(format!("{}.png", name));
+    if !tex_path.exists() {
+        std::fs::write(&tex_path, MINIMAL_PNG).map_err(|e| format!("write: {}", e))?;
+    }
+    Ok(vec![format!("assets/minecraft/textures/particle/{}.png", name)])
+}
+
+fn add_environment(root: &std::path::Path, name: &str, _sp: &style::Spinner) -> Result<Vec<String>, String> {
+    let tex_dir = root.join("assets/minecraft/textures/environment");
+    std::fs::create_dir_all(&tex_dir).map_err(|e| format!("mkdir: {}", e))?;
+    let tex_path = tex_dir.join(format!("{}.png", name));
+    if !tex_path.exists() {
+        std::fs::write(&tex_path, MINIMAL_PNG).map_err(|e| format!("write: {}", e))?;
+    }
+    Ok(vec![format!("assets/minecraft/textures/environment/{}.png", name)])
 }
