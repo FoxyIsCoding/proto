@@ -41,6 +41,10 @@ pub enum ResourcePackAction {
         category: String,
         #[arg(required = true, value_name = "NAME")]
         name: String,
+        #[arg(long, value_name = "PATH", help = "Path to a PNG texture to use")]
+        png: Option<String>,
+        #[arg(long, value_name = "N", help = "Texture resolution (default: 16 for 16x16)")]
+        resolution: Option<u32>,
     },
 }
 
@@ -93,7 +97,7 @@ fn resource_pack(action: &ResourcePackAction) {
         ResourcePackAction::Create { version, name, clean } => create(version, name, *clean),
         ResourcePackAction::Fetch => fetch(),
         ResourcePackAction::Pack { branding } => pack(*branding),
-        ResourcePackAction::Add { category, name } => add(category, name),
+        ResourcePackAction::Add { category, name, png, resolution } => add(category, name, png.as_deref(), *resolution),
     }
 }
 
@@ -355,19 +359,7 @@ fn extract_assets(jar_path: &std::path::Path, dest: &std::path::Path, sp: &style
     sp.update(&format!("Extracted {} asset files", count));
 }
 
-const MINIMAL_PNG: &[u8] = &[
-    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-    0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-    0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-    0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-    0x54, 0x78, 0x9C, 0x62, 0x00, 0x00, 0x00, 0x02,
-    0x00, 0x01, 0xE5, 0x27, 0xDE, 0xFC, 0x00, 0x00,
-    0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42,
-    0x60, 0x82,
-];
-
-fn add(category: &str, name: &str) {
+fn add(category: &str, name: &str, png_path: Option<&str>, resolution: Option<u32>) {
     let cwd = std::env::current_dir().unwrap_or_default();
     let mcmeta = cwd.join("pack.mcmeta");
 
@@ -384,15 +376,39 @@ fn add(category: &str, name: &str) {
     }
 
     let sp = style::Spinner::new(&format!("Adding {} '{}'...", category, name));
+
+    let tex_data = match png_path {
+        Some(path) => {
+            sp.update(&format!("Reading texture from {}...", path));
+            match std::fs::read(path) {
+                Ok(data) => {
+                    if data.len() >= 8 && &data[..8] == b"\x89PNG\r\n\x1a\n" {
+                        Some(data)
+                    } else {
+                        sp.fail(&format!("{} is not a valid PNG", path));
+                        return;
+                    }
+                }
+                Err(e) => {
+                    sp.fail(&format!("Cannot read {}: {}", path, e));
+                    return;
+                }
+            }
+        }
+        None => None,
+    };
+
+    let tex_resolution = resolution.unwrap_or(16);
+
     let results = match category.to_lowercase().as_str() {
-        "item" => add_item(&cwd, &safe_name, &sp),
-        "block" => add_block(&cwd, &safe_name, &sp),
-        "entity" => add_entity(&cwd, &safe_name, &sp),
-        "armor" => add_armor(&cwd, &safe_name, &sp),
-        "armor_layer" | "armour_layer" => add_armor_layer(&cwd, &safe_name, &sp),
-        "gui" => add_gui(&cwd, &safe_name, &sp),
-        "particle" => add_particle(&cwd, &safe_name, &sp),
-        "environment" | "env" => add_environment(&cwd, &safe_name, &sp),
+        "item" => add_item(&cwd, &safe_name, &sp, &tex_data, tex_resolution),
+        "block" => add_block(&cwd, &safe_name, &sp, &tex_data, tex_resolution),
+        "entity" => add_entity(&cwd, &safe_name, &sp, &tex_data, tex_resolution),
+        "armor" => add_armor(&cwd, &safe_name, &sp, &tex_data, tex_resolution),
+        "armor_layer" | "armour_layer" => add_armor_layer(&cwd, &safe_name, &sp, &tex_data, tex_resolution),
+        "gui" => add_gui(&cwd, &safe_name, &sp, &tex_data, tex_resolution),
+        "particle" => add_particle(&cwd, &safe_name, &sp, &tex_data, tex_resolution),
+        "environment" | "env" => add_environment(&cwd, &safe_name, &sp, &tex_data, tex_resolution),
         _ => {
             sp.fail(&format!("Unknown category: '{}'", category));
             eprintln!("\n{} Categories: item, block, entity, armor, armor_layer, gui, particle, environment", style::warn(""));
@@ -402,7 +418,8 @@ fn add(category: &str, name: &str) {
 
     match results {
         Ok(files) => {
-            sp.done(&format!("Added {} '{}'", category, name));
+            let res_info = if png_path.is_some() { "custom" } else { &format!("{}x{}", tex_resolution, tex_resolution) };
+            sp.done(&format!("Added {} '{}' ({})", category, name, res_info));
             println!();
             for f in files {
                 println!("  {} {}", "✦".style(style::Theme::SUCCESS), f.style(style::Theme::MUTED));
@@ -414,7 +431,67 @@ fn add(category: &str, name: &str) {
     }
 }
 
-fn add_item(root: &std::path::Path, name: &str, sp: &style::Spinner) -> Result<Vec<String>, String> {
+fn write_texture(target: &std::path::Path, tex_data: &Option<Vec<u8>>, resolution: u32) -> std::io::Result<bool> {
+    if target.exists() {
+        return Ok(false);
+    }
+    let data = match tex_data {
+        Some(d) => d.clone(),
+        None => generate_blank_png(resolution, resolution),
+    };
+    std::fs::write(target, &data)?;
+    Ok(true)
+}
+
+fn generate_blank_png(width: u32, height: u32) -> Vec<u8> {
+    let mut out = Vec::new();
+
+    out.extend_from_slice(&[137, 80, 78, 71, 13, 10, 26, 10]);
+
+    let mut ihdr_data = Vec::new();
+    ihdr_data.extend_from_slice(&width.to_be_bytes());
+    ihdr_data.extend_from_slice(&height.to_be_bytes());
+    ihdr_data.extend_from_slice(&[8, 6, 0, 0, 0]);
+
+    let mut ihdr_chunk = b"IHDR".to_vec();
+    ihdr_chunk.extend_from_slice(&ihdr_data);
+    let ihdr_crc = crc32fast::hash(&ihdr_chunk);
+    out.extend_from_slice(&(ihdr_data.len() as u32).to_be_bytes());
+    out.extend_from_slice(b"IHDR");
+    out.extend_from_slice(&ihdr_data);
+    out.extend_from_slice(&ihdr_crc.to_be_bytes());
+
+    let row_size = 1 + (width as usize) * 4;
+    let raw_size = (height as usize) * row_size;
+    let raw: Vec<u8> = vec![0u8; raw_size];
+
+    let mut zlib_data = Vec::new();
+    {
+        use flate2::write::ZlibEncoder;
+        use flate2::Compression;
+        use std::io::Write;
+        let mut enc = ZlibEncoder::new(&mut zlib_data, Compression::best());
+        enc.write_all(&raw).unwrap();
+        enc.finish().unwrap();
+    }
+
+    let mut idat_chunk = b"IDAT".to_vec();
+    idat_chunk.extend_from_slice(&zlib_data);
+    let idat_crc = crc32fast::hash(&idat_chunk);
+    out.extend_from_slice(&(zlib_data.len() as u32).to_be_bytes());
+    out.extend_from_slice(b"IDAT");
+    out.extend_from_slice(&zlib_data);
+    out.extend_from_slice(&idat_crc.to_be_bytes());
+
+    let iend_crc = crc32fast::hash(b"IEND");
+    out.extend_from_slice(&0u32.to_be_bytes());
+    out.extend_from_slice(b"IEND");
+    out.extend_from_slice(&iend_crc.to_be_bytes());
+
+    out
+}
+
+fn add_item(root: &std::path::Path, name: &str, _sp: &style::Spinner, tex_data: &Option<Vec<u8>>, resolution: u32) -> Result<Vec<String>, String> {
     let mut created = Vec::new();
 
     let models_dir = root.join("assets/minecraft/models/item");
@@ -428,19 +505,17 @@ fn add_item(root: &std::path::Path, name: &str, sp: &style::Spinner) -> Result<V
     std::fs::write(&model_path, &model).map_err(|e| format!("write: {}", e))?;
     created.push(format!("assets/minecraft/models/item/{}.json", name));
 
-    sp.update("Creating placeholder texture...");
     let tex_dir = root.join("assets/minecraft/textures/item");
     std::fs::create_dir_all(&tex_dir).map_err(|e| format!("mkdir: {}", e))?;
     let tex_path = tex_dir.join(format!("{}.png", name));
-    if !tex_path.exists() {
-        std::fs::write(&tex_path, MINIMAL_PNG).map_err(|e| format!("write: {}", e))?;
+    if write_texture(&tex_path, tex_data, resolution).map_err(|e| format!("write: {}", e))? {
         created.push(format!("assets/minecraft/textures/item/{}.png", name));
     }
 
     Ok(created)
 }
 
-fn add_block(root: &std::path::Path, name: &str, sp: &style::Spinner) -> Result<Vec<String>, String> {
+fn add_block(root: &std::path::Path, name: &str, sp: &style::Spinner, tex_data: &Option<Vec<u8>>, resolution: u32) -> Result<Vec<String>, String> {
     let mut created = Vec::new();
 
     let models_dir = root.join("assets/minecraft/models/block");
@@ -478,79 +553,74 @@ fn add_block(root: &std::path::Path, name: &str, sp: &style::Spinner) -> Result<
     let tex_dir = root.join("assets/minecraft/textures/block");
     std::fs::create_dir_all(&tex_dir).map_err(|e| format!("mkdir: {}", e))?;
     let tex_path = tex_dir.join(format!("{}.png", name));
-    if !tex_path.exists() {
-        std::fs::write(&tex_path, MINIMAL_PNG).map_err(|e| format!("write: {}", e))?;
+    if write_texture(&tex_path, tex_data, resolution).map_err(|e| format!("write: {}", e))? {
         created.push(format!("assets/minecraft/textures/block/{}.png", name));
     }
 
     Ok(created)
 }
 
-fn add_entity(root: &std::path::Path, name: &str, _sp: &style::Spinner) -> Result<Vec<String>, String> {
+fn add_entity(root: &std::path::Path, name: &str, _sp: &style::Spinner, tex_data: &Option<Vec<u8>>, resolution: u32) -> Result<Vec<String>, String> {
     let mut created = Vec::new();
     let tex_dir = root.join("assets/minecraft/textures/entity");
     std::fs::create_dir_all(&tex_dir).map_err(|e| format!("mkdir: {}", e))?;
     let tex_path = tex_dir.join(format!("{}.png", name));
-    if !tex_path.exists() {
-        std::fs::write(&tex_path, MINIMAL_PNG).map_err(|e| format!("write: {}", e))?;
+    if write_texture(&tex_path, tex_data, resolution).map_err(|e| format!("write: {}", e))? {
         created.push(format!("assets/minecraft/textures/entity/{}.png", name));
     }
     Ok(created)
 }
 
-fn add_armor(root: &std::path::Path, name: &str, _sp: &style::Spinner) -> Result<Vec<String>, String> {
+fn add_armor(root: &std::path::Path, name: &str, _sp: &style::Spinner, tex_data: &Option<Vec<u8>>, resolution: u32) -> Result<Vec<String>, String> {
     let mut created = Vec::new();
-
     let tex_dir = root.join("assets/minecraft/textures/models/armor");
     std::fs::create_dir_all(&tex_dir).map_err(|e| format!("mkdir: {}", e))?;
-
     for layer in &[1, 2] {
         let fname = format!("{}_layer_{}.png", name, layer);
         let tex_path = tex_dir.join(&fname);
-        if !tex_path.exists() {
-            std::fs::write(&tex_path, MINIMAL_PNG).map_err(|e| format!("write: {}", e))?;
+        if write_texture(&tex_path, tex_data, resolution).map_err(|e| format!("write: {}", e))? {
             created.push(format!("assets/minecraft/textures/models/armor/{}", fname));
         }
     }
     Ok(created)
 }
 
-fn add_armor_layer(root: &std::path::Path, name: &str, _sp: &style::Spinner) -> Result<Vec<String>, String> {
+fn add_armor_layer(root: &std::path::Path, name: &str, _sp: &style::Spinner, tex_data: &Option<Vec<u8>>, resolution: u32) -> Result<Vec<String>, String> {
     let tex_dir = root.join("assets/minecraft/textures/models/armor");
     std::fs::create_dir_all(&tex_dir).map_err(|e| format!("mkdir: {}", e))?;
     let tex_path = tex_dir.join(format!("{}.png", name));
-    if !tex_path.exists() {
-        std::fs::write(&tex_path, MINIMAL_PNG).map_err(|e| format!("write: {}", e))?;
+    if write_texture(&tex_path, tex_data, resolution).map_err(|e| format!("write: {}", e))? {
+        return Ok(vec![format!("assets/minecraft/textures/models/armor/{}.png", name)]);
     }
-    Ok(vec![format!("assets/minecraft/textures/models/armor/{}.png", name)])
+    Ok(vec![])
 }
 
-fn add_gui(root: &std::path::Path, name: &str, _sp: &style::Spinner) -> Result<Vec<String>, String> {
+fn add_gui(root: &std::path::Path, name: &str, _sp: &style::Spinner, tex_data: &Option<Vec<u8>>, resolution: u32) -> Result<Vec<String>, String> {
     let tex_dir = root.join("assets/minecraft/textures/gui");
     std::fs::create_dir_all(&tex_dir).map_err(|e| format!("mkdir: {}", e))?;
     let tex_path = tex_dir.join(format!("{}.png", name));
-    if !tex_path.exists() {
-        std::fs::write(&tex_path, MINIMAL_PNG).map_err(|e| format!("write: {}", e))?;
+    if write_texture(&tex_path, tex_data, resolution).map_err(|e| format!("write: {}", e))? {
+        return Ok(vec![format!("assets/minecraft/textures/gui/{}.png", name)]);
     }
-    Ok(vec![format!("assets/minecraft/textures/gui/{}.png", name)])
+    Ok(vec![])
 }
 
-fn add_particle(root: &std::path::Path, name: &str, _sp: &style::Spinner) -> Result<Vec<String>, String> {
+fn add_particle(root: &std::path::Path, name: &str, _sp: &style::Spinner, tex_data: &Option<Vec<u8>>, resolution: u32) -> Result<Vec<String>, String> {
     let tex_dir = root.join("assets/minecraft/textures/particle");
     std::fs::create_dir_all(&tex_dir).map_err(|e| format!("mkdir: {}", e))?;
     let tex_path = tex_dir.join(format!("{}.png", name));
-    if !tex_path.exists() {
-        std::fs::write(&tex_path, MINIMAL_PNG).map_err(|e| format!("write: {}", e))?;
+    if write_texture(&tex_path, tex_data, resolution).map_err(|e| format!("write: {}", e))? {
+        return Ok(vec![format!("assets/minecraft/textures/particle/{}.png", name)]);
     }
-    Ok(vec![format!("assets/minecraft/textures/particle/{}.png", name)])
+    Ok(vec![])
 }
 
-fn add_environment(root: &std::path::Path, name: &str, _sp: &style::Spinner) -> Result<Vec<String>, String> {
+fn add_environment(root: &std::path::Path, name: &str, _sp: &style::Spinner, tex_data: &Option<Vec<u8>>, resolution: u32) -> Result<Vec<String>, String> {
     let tex_dir = root.join("assets/minecraft/textures/environment");
     std::fs::create_dir_all(&tex_dir).map_err(|e| format!("mkdir: {}", e))?;
     let tex_path = tex_dir.join(format!("{}.png", name));
-    if !tex_path.exists() {
-        std::fs::write(&tex_path, MINIMAL_PNG).map_err(|e| format!("write: {}", e))?;
+    if write_texture(&tex_path, tex_data, resolution).map_err(|e| format!("write: {}", e))? {
+        return Ok(vec![format!("assets/minecraft/textures/environment/{}.png", name)]);
     }
-    Ok(vec![format!("assets/minecraft/textures/environment/{}.png", name)])
+    Ok(vec![])
 }
