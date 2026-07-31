@@ -192,10 +192,13 @@ fn share_with_vnc() {
 
     sp.update("Starting websockify...");
     let mut ws: Option<std::process::Child> = None;
-    if crate::utils::which("websockify") {
-        if let Ok(c) = std::process::Command::new("websockify")
+
+    let ws_bin = find_websockify();
+    if let Some(bin) = ws_bin {
+        if let Ok(c) = std::process::Command::new(&bin)
             .args([&ws_port.to_string(), &format!("localhost:{}", vnc_port)])
-            .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn()
+            .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null())
+            .spawn()
         { ws = Some(c); }
     }
 
@@ -233,7 +236,7 @@ fn share_with_vnc() {
     println!("{}", style::divider());
     println!("{}", style::label_value("Local", &format!("http://{}:{}", local_ip, web_port)));
     if !public_url.is_empty() { println!("{}", style::label_value("Public", &public_url)); }
-    println!("{}", style::label_value("NoVNC", if ws.is_some() { "✦ browser VNC active" } else { "pip install websockify for browser VNC" }));
+    println!("{}", style::label_value("NoVNC", if ws.is_some() { "✦ browser VNC active" } else { "pipx install websockify (auto-attempted)" }));
     println!("{}", style::divider());
     if ws.is_some() {
         println!("\n{} Share the link — opens your full desktop in any browser!", "★".style(style::Theme::SUCCESS).bold());
@@ -288,6 +291,31 @@ fn start_http_server(port: u16, html: String) {
         }
         std::thread::sleep(std::time::Duration::from_millis(200));
     });
+}
+
+fn find_websockify() -> Option<String> {
+    if crate::utils::which("websockify") { return Some("websockify".into()); }
+    let local = dirs::home_dir().unwrap_or_default().join(".local/bin/websockify");
+    if local.exists() { return Some(local.to_string_lossy().to_string()); }
+
+    let sp = style::Spinner::new("Installing websockify via pipx...");
+    if crate::utils::which("pipx") {
+        let status = std::process::Command::new("pipx")
+            .args(["install", "websockify"])
+            .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null())
+            .status();
+        if status.map(|s| s.success()).unwrap_or(false) {
+            sp.done("websockify installed via pipx");
+            let path = dirs::home_dir().unwrap_or_default().join(".local/bin/websockify");
+            if path.exists() { return Some(path.to_string_lossy().to_string()); }
+        } else {
+            sp.fail("pipx install websockify failed");
+        }
+    } else {
+        sp.fail("pipx not found");
+        println!("{} Install: {}", style::warn(""), "sudo pacman -S python-pipx && pipx install websockify".style(style::Theme::ACCENT));
+    }
+    None
 }
 
 fn get_local_ip() -> Option<String> {
