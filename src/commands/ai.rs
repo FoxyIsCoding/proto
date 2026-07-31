@@ -196,15 +196,23 @@ fn chat() {
 
         messages.push(("user".into(), input.clone()));
 
-        let sp = style::Spinner::new("Thinking...");
-        match call_ai(&config, &messages) {
-            Ok(response) => {
-                sp.done("");
-                println!("\n{} {}\n", "bot ›".style(style::Theme::SUCCESS).bold(), response.trim());
-                messages.push(("assistant".into(), response));
+        print!("\n{} ", "bot ›".style(style::Theme::SUCCESS).bold());
+        let _ = std::io::stdout().flush();
+
+        let mut full_response = String::new();
+        let result = call_ai_stream(&config, &messages, |token| {
+            print!("{}", token);
+            let _ = std::io::stdout().flush();
+            full_response.push_str(token);
+        });
+
+        match result {
+            Ok(_) => {
+                println!("\n");
+                messages.push(("assistant".into(), full_response));
             }
             Err(e) => {
-                sp.fail(&e);
+                println!("\n{} {}\n", style::error(""), e);
             }
         }
     }
@@ -353,15 +361,27 @@ fn explain() {
 }
 
 fn call_ai(config: &AiConfig, messages: &[(String, String)]) -> Result<String, String> {
+    let mut full = String::new();
+    call_ai_stream(config, messages, |token| { full.push_str(token); })?;
+    Ok(full)
+}
+
+fn call_ai_stream(config: &AiConfig, messages: &[(String, String)], mut on_token: impl FnMut(&str)) -> Result<String, String> {
     match config.provider.as_str() {
-        "openai" => call_openai(config, messages),
-        "gemini" => call_gemini(config, messages),
-        "custom" => call_custom(config, messages),
+        "openai" | "custom" => call_openai_compat(config, messages, &config.provider, on_token),
+        "gemini" => call_gemini_stream(config, messages, on_token),
         _ => Err(format!("Unknown provider: {}", config.provider)),
     }
 }
 
-fn call_openai(config: &AiConfig, messages: &[(String, String)]) -> Result<String, String> {
+fn call_openai_compat(config: &AiConfig, messages: &[(String, String)], provider: &str, mut on_token: impl FnMut(&str)) -> Result<String, String> {
+    let url = if provider == "custom" {
+        let base = config.endpoint.as_deref().unwrap_or("http://localhost:11434/v1").trim_end_matches('/');
+        format!("{}/chat/completions", base)
+    } else {
+        "https://api.openai.com/v1/chat/completions".into()
+    };
+
     let msgs: Vec<serde_json::Value> = messages.iter().map(|(role, content)| {
         serde_json::json!({"role": role, "content": content})
     }).collect();
@@ -371,49 +391,39 @@ fn call_openai(config: &AiConfig, messages: &[(String, String)]) -> Result<Strin
         "messages": msgs,
         "temperature": 0.7,
         "max_tokens": 2048,
+        "stream": true,
     });
 
-    let resp = ureq::post("https://api.openai.com/v1/chat/completions")
-        .set("Authorization", &format!("Bearer {}", config.api_key))
-        .set("Content-Type", "application/json")
-        .send_json(body)
-        .map_err(|e| format!("API error: {}", e))?;
+    let req = ureq::post(&url).set("Content-Type", "application/json");
+    let req = if provider == "custom" && (config.api_key.is_empty() || config.api_key == "ollama") {
+        req
+    } else {
+        req.set("Authorization", &format!("Bearer {}", config.api_key))
+    };
 
-    let json: serde_json::Value = resp.into_json().map_err(|e| format!("Parse error: {}", e))?;
-
-    json["choices"][0]["message"]["content"]
-        .as_str()
-        .map(|s| s.to_string())
-        .ok_or_else(|| format!("Unexpected response: {}", json))
+    let resp = req.send_json(body).map_err(|e| format!("API error: {}", e))?;
+    read_openai_sse(resp, on_token)
 }
 
-fn call_gemini(config: &AiConfig, messages: &[(String, String)]) -> Result<String, String> {
+fn call_gemini_stream(config: &AiConfig, messages: &[(String, String)], mut on_token: impl FnMut(&str)) -> Result<String, String> {
     let contents: Vec<serde_json::Value> = messages.iter().filter(|(r, _)| r != "system").map(|(role, content)| {
         let r = if role == "assistant" { "model" } else { "user" };
-        serde_json::json!({
-            "role": r,
-            "parts": [{"text": content}]
-        })
+        serde_json::json!({"role": r, "parts": [{"text": content}]})
     }).collect();
 
     let system_instruction = messages.iter().find(|(r, _)| r == "system").map(|(_, c)| c.clone());
 
     let mut body = serde_json::json!({
         "contents": contents,
-        "generationConfig": {
-            "temperature": 0.7,
-            "maxOutputTokens": 2048,
-        }
+        "generationConfig": { "temperature": 0.7, "maxOutputTokens": 2048 }
     });
 
     if let Some(sys) = &system_instruction {
-        body["systemInstruction"] = serde_json::json!({
-            "parts": [{"text": sys}]
-        });
+        body["systemInstruction"] = serde_json::json!({"parts": [{"text": sys}]});
     }
 
     let url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+        "https://generativelanguage.googleapis.com/v1beta/models/{}:streamGenerateContent?alt=sse&key={}",
         config.model, config.api_key
     );
 
@@ -422,44 +432,57 @@ fn call_gemini(config: &AiConfig, messages: &[(String, String)]) -> Result<Strin
         .send_json(body)
         .map_err(|e| format!("API error: {}", e))?;
 
-    let json: serde_json::Value = resp.into_json().map_err(|e| format!("Parse error: {}", e))?;
-
-    json["candidates"][0]["content"]["parts"][0]["text"]
-        .as_str()
-        .map(|s| s.to_string())
-        .ok_or_else(|| format!("Unexpected response: {}", json))
+    read_gemini_sse(resp, on_token)
 }
 
-fn call_custom(config: &AiConfig, messages: &[(String, String)]) -> Result<String, String> {
-    let endpoint = config.endpoint.as_deref().unwrap_or("http://localhost:11434/v1");
-    let base = endpoint.trim_end_matches('/');
-    let url = format!("{}/chat/completions", base);
+fn read_openai_sse(resp: ureq::Response, mut on_token: impl FnMut(&str)) -> Result<String, String> {
+    use std::io::Read;
+    let mut full = String::new();
+    let mut reader = resp.into_reader();
+    let mut buf = [0u8; 4096];
 
-    let msgs: Vec<serde_json::Value> = messages.iter().map(|(role, content)| {
-        serde_json::json!({"role": role, "content": content})
-    }).collect();
+    loop {
+        let n = reader.read(&mut buf).map_err(|e| format!("Stream read error: {}", e))?;
+        if n == 0 { break; }
+        let chunk = String::from_utf8_lossy(&buf[..n]);
+        for line in chunk.lines() {
+            let line = line.trim();
+            if line.is_empty() || line == "data: [DONE]" { continue; }
+            if let Some(data) = line.strip_prefix("data: ") {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                    if let Some(content) = json["choices"][0]["delta"]["content"].as_str() {
+                        on_token(content);
+                        full.push_str(content);
+                    }
+                }
+            }
+        }
+    }
+    Ok(full)
+}
 
-    let mut body = serde_json::json!({
-        "model": config.model,
-        "messages": msgs,
-        "temperature": 0.7,
-        "max_tokens": 2048,
-    });
+fn read_gemini_sse(resp: ureq::Response, mut on_token: impl FnMut(&str)) -> Result<String, String> {
+    use std::io::Read;
+    let mut full = String::new();
+    let mut reader = resp.into_reader();
+    let mut buf = [0u8; 4096];
 
-    let req = ureq::post(&url)
-        .set("Content-Type", "application/json");
-
-    let req = if config.api_key.is_empty() || config.api_key == "ollama" {
-        req
-    } else {
-        req.set("Authorization", &format!("Bearer {}", config.api_key))
-    };
-
-    let resp = req.send_json(body).map_err(|e| format!("Endpoint error: {} (check --endpoint)", e))?;
-    let json: serde_json::Value = resp.into_json().map_err(|e| format!("Parse error: {}", e))?;
-
-    json["choices"][0]["message"]["content"]
-        .as_str()
-        .map(|s| s.to_string())
-        .ok_or_else(|| format!("Unexpected response from {}. Expected OpenAI-compatible API.", base))
+    loop {
+        let n = reader.read(&mut buf).map_err(|e| format!("Stream read error: {}", e))?;
+        if n == 0 { break; }
+        let chunk = String::from_utf8_lossy(&buf[..n]);
+        for line in chunk.lines() {
+            let line = line.trim();
+            if line.is_empty() { continue; }
+            if let Some(data) = line.strip_prefix("data: ") {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                    if let Some(text) = json["candidates"][0]["content"]["parts"][0]["text"].as_str() {
+                        on_token(text);
+                        full.push_str(text);
+                    }
+                }
+            }
+        }
+    }
+    Ok(full)
 }
