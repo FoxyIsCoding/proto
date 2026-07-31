@@ -38,6 +38,9 @@ fn print_general_help() {
     print_cmd("status", "ping|monitor|serve|report", "Network monitoring tools");
     print_cmd("discord", "bot|quest", "Discord bot creator & tools");
     print_cmd("app", "doctor|port|nuke|snap", "Project diagnostics & cleanup");
+    print_cmd("ai", "chat|setup|summarize|explain", "AI assistant & changelog generator");
+    print_cmd("copy-ctx", "", "Bundle repo into LLM-ready clipboard context");
+    print_cmd("memo", "add|list|clear", "Location-aware scratchpad notes");
 
     println!("\n{}", "FLAGS:".style(style::Theme::HEADER));
     print_cmd("--version", "", "Print version and exit");
@@ -155,6 +158,31 @@ fn print_command_help(command: &str) {
             println!("  proto app snap <NAME> restore  Restore a snapshot");
             println!("  proto app snap <NAME> delete   Delete a snapshot");
             println!("  proto app snap                 List all snapshots");
+        }
+        "ai" => {
+            println!("{}", "proto ai".style(style::Theme::HEADER));
+            println!("  AI assistant powered by OpenAI or Gemini.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto ai                  Interactive chat session");
+            println!("  proto ai setup            Configure API key + personality");
+            println!("  proto ai summarize [FROM] [TO]  Generate CHANGELOG.md from git log");
+            println!("  proto ai explain          Explain the last failed command\n");
+            println!("{}", "PERSONALITIES:".style(style::Theme::HEADER));
+            println!("  engineer, helpful, furry, minimal, custom");
+        }
+        "copy-ctx" => {
+            println!("{}", "proto copy-ctx".style(style::Theme::HEADER));
+            println!("  Scans git repo, opens a file picker, bundles selected files\n");
+            println!("  into Markdown code blocks and copies to clipboard.\n");
+            println!("  Paste directly into ChatGPT, Claude, or any LLM.");
+        }
+        "memo" => {
+            println!("{}", "proto memo".style(style::Theme::HEADER));
+            println!("  Location-aware scratchpad stored in .proto file.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto memo list         Show all memos");
+            println!("  proto memo add <text>   Append a memo with timestamp");
+            println!("  proto memo clear        Delete all memos (with confirmation)");
         }
         other => {
             println!("{} Unknown command: '{}'", style::error(""), other.style(style::Theme::ACCENT));

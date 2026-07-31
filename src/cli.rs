@@ -76,6 +76,18 @@ pub enum Commands {
         #[command(subcommand)]
         action: commands::app::AppAction,
     },
+    #[command(about = "AI chat, changelog generation, and error explainer")]
+    Ai {
+        #[command(subcommand)]
+        action: commands::ai::AiAction,
+    },
+    #[command(name = "copy-ctx", about = "Bundle git repo source files into an LLM-ready clipboard context")]
+    CopyCtx,
+    #[command(about = "Location-aware scratchpad memos")]
+    Memo {
+        #[command(subcommand)]
+        action: commands::memo::MemoAction,
+    },
 }
 
 pub fn run(cli: Cli) {
@@ -106,6 +118,9 @@ pub fn run(cli: Cli) {
         Some(Commands::Convert { input, to }) => commands::convert::run(&commands::convert::ConvertAction::Run { input, to }),
         Some(Commands::Encrypt { action }) => commands::encrypt::run(&action),
         Some(Commands::App { action }) => commands::app::run(&action),
+        Some(Commands::Ai { action }) => commands::ai::run(&action),
+        Some(Commands::CopyCtx) => commands::copyctx::run(),
+        Some(Commands::Memo { action }) => commands::memo::run(&action),
         None => {
             commands::help::run(&commands::help::HelpAction::All);
         }
