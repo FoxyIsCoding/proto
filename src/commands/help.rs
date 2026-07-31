@@ -31,6 +31,7 @@ fn print_general_help() {
     println!("{}", "COMMANDS:".style(style::Theme::HEADER));
     print_cmd("help", "[command]", "Show this help or help for a specific command");
     print_cmd("system", "", "Display beautiful system information");
+    print_cmd("alias", "create|list|remove", "Interactive shell alias builder");
     print_cmd("pkg", "<action>", "Cross-distro package manager wrapper");
     print_cmd("git", "<action>", "Git workflow enhancements");
     print_cmd("setup", "", "Interactive configuration wizard");
@@ -69,6 +70,19 @@ fn print_command_help(command: &str) {
             println!("{}", "SHOWS:".style(style::Theme::HEADER));
             println!("  OS, kernel, architecture, CPU, RAM, disk usage,");
             println!("  uptime, DE/WM, shell, terminal, and package count.");
+        }
+        "alias" => {
+            println!("{}", "proto alias".style(style::Theme::HEADER));
+            println!("  Interactive shell alias builder for bash, zsh, and fish.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto alias create    Build a new alias interactively");
+            println!("  proto alias list      Show all Proto-managed aliases");
+            println!("  proto alias remove <NAME>  Remove an alias\n");
+            println!("{}", "CREATE FLOW:".style(style::Theme::HEADER));
+            println!("  1. Enter alias name + command + description");
+            println!("  2. Choose target shells (multi-select)");
+            println!("  3. Choose permanent (writes to .bashrc/.zshrc/config.fish)");
+            println!("     or session-only");
         }
         "pkg" => {
             println!("{}", "proto pkg".style(style::Theme::HEADER));

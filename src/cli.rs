@@ -44,6 +44,11 @@ pub enum Commands {
     },
     #[command(about = "Interactive first-time configuration wizard")]
     Setup,
+    #[command(about = "Interactive shell alias builder (bash/zsh/fish)")]
+    Alias {
+        #[command(subcommand)]
+        action: commands::alias::AliasAction,
+    },
     #[command(about = "Minecraft utilities (resource packs & servers)")]
     Mc {
         #[command(subcommand)]
@@ -108,6 +113,7 @@ pub fn run(cli: Cli) {
                 None => commands::help::run(&commands::help::HelpAction::All),
             }
         }
+        Some(Commands::Alias { action }) => commands::alias::run(&action),
         Some(Commands::System) => commands::system::run(),
         Some(Commands::Pkg { action }) => commands::pkg::run(&action),
         Some(Commands::Git { action }) => commands::git::run(&action),
