@@ -8,6 +8,7 @@ pub mod mc_server;
 pub mod status;
 pub mod convert;
 pub mod encrypt;
+pub mod share;
 pub mod alias;
 pub mod ai;
 pub mod copyctx;

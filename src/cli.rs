@@ -54,6 +54,11 @@ pub enum Commands {
         #[command(subcommand)]
         action: commands::mc::McAction,
     },
+    #[command(name = "share-session", about = "Share terminal session via tmate/tmux")]
+    ShareSession {
+        #[command(subcommand)]
+        action: commands::share::ShareAction,
+    },
     #[command(about = "Network status monitoring tools")]
     Status {
         #[command(subcommand)]
@@ -113,6 +118,7 @@ pub fn run(cli: Cli) {
                 None => commands::help::run(&commands::help::HelpAction::All),
             }
         }
+        Some(Commands::ShareSession { action }) => commands::share::run(&action),
         Some(Commands::Alias { action }) => commands::alias::run(&action),
         Some(Commands::System) => commands::system::run(),
         Some(Commands::Pkg { action }) => commands::pkg::run(&action),

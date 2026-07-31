@@ -32,6 +32,7 @@ fn print_general_help() {
     print_cmd("help", "[command]", "Show this help or help for a specific command");
     print_cmd("system", "", "Display beautiful system information");
     print_cmd("alias", "create|list|remove", "Interactive shell alias builder");
+    print_cmd("share-session", "create|join", "Share terminal via tmate/tmux");
     print_cmd("pkg", "<action>", "Cross-distro package manager wrapper");
     print_cmd("git", "<action>", "Git workflow enhancements");
     print_cmd("setup", "", "Interactive configuration wizard");
@@ -83,6 +84,16 @@ fn print_command_help(command: &str) {
             println!("  2. Choose target shells (multi-select)");
             println!("  3. Choose permanent (writes to .bashrc/.zshrc/config.fish)");
             println!("     or session-only");
+        }
+        "share-session" => {
+            println!("{}", "proto share-session".style(style::Theme::HEADER));
+            println!("  Share your terminal for pair programming.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto share-session create    Start a shareable session");
+            println!("  proto share-session join <LINK>  Join a shared session\n");
+            println!("{}", "BACKENDS:".style(style::Theme::HEADER));
+            println!("  tmate (preferred) — generates SSH + web links, works remotely");
+            println!("  tmux — local-only, teammate SSHs in and attaches");
         }
         "pkg" => {
             println!("{}", "proto pkg".style(style::Theme::HEADER));
