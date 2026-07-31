@@ -405,7 +405,20 @@ fn call_openai_compat(config: &AiConfig, messages: &[(String, String)], provider
         req.set("Authorization", &format!("Bearer {}", config.api_key))
     };
 
-    let resp = req.send_json(body).map_err(|e| format!("API error: {}", e))?;
+    let resp = req.send_json(&body).map_err(|e| format!("API error: {}", e))?;
+    let status = resp.status();
+
+    if status == 401 {
+        return Err("401 Unauthorized — your API key is missing or invalid. Run `proto ai setup` to reconfigure.".into());
+    }
+    if status == 404 {
+        return Err(format!("404 Not Found — check your endpoint URL: {}", url));
+    }
+    if status != 200 {
+        let body = resp.into_string().unwrap_or_default();
+        return Err(format!("HTTP {} from {}: {}", status, url, body.chars().take(200).collect::<String>()));
+    }
+
     read_openai_sse(resp, on_token)
 }
 
@@ -434,7 +447,16 @@ fn call_gemini_stream(config: &AiConfig, messages: &[(String, String)], mut on_t
     let resp = ureq::post(&url)
         .set("Content-Type", "application/json")
         .send_json(body)
-        .map_err(|e| format!("API error: {}", e))?;
+        .map_err(|e| format!("Gemini API error: {}", e))?;
+
+    let status = resp.status();
+    if status == 403 {
+        return Err("403 Forbidden — your API key is invalid. Run `proto ai setup` to reconfigure.".into());
+    }
+    if status != 200 {
+        let msg = resp.into_string().unwrap_or_default();
+        return Err(format!("Gemini HTTP {}: {}", status, msg.chars().take(200).collect::<String>()));
+    }
 
     read_gemini_sse(resp, on_token)
 }
