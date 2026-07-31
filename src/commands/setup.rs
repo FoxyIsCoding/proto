@@ -113,29 +113,49 @@ fn install_completions(shell: &str) -> Result<String, String> {
 
 fn generate_bash_completion() -> String {
     r#"_proto_completion() {
-    local cur prev opts
-    COMREPLY=()
+    local cur prev word2 word3
+    COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
+    word2="${COMP_WORDS[2]}"
+    word3="${COMP_WORDS[3]}"
 
     case "${prev}" in
         proto)
-            COMREPLY=( $(compgen -W "help system pkg git setup" -- "${cur}") )
+            COMPREPLY=( $(compgen -W "help system pkg git setup mc" -- "${cur}") )
             return 0
             ;;
         pkg)
-            COMREPLY=( $(compgen -W "install search remove update list" -- "${cur}") )
+            COMPREPLY=( $(compgen -W "install search remove update list" -- "${cur}") )
             return 0
             ;;
         git)
-            COMREPLY=( $(compgen -W "log stats save undo branch" -- "${cur}") )
+            COMPREPLY=( $(compgen -W "log stats save undo branch" -- "${cur}") )
+            return 0
+            ;;
+        mc)
+            COMPREPLY=( $(compgen -W "resource_pack server" -- "${cur}") )
+            return 0
+            ;;
+        resource_pack)
+            COMPREPLY=( $(compgen -W "create fetch pack add" -- "${cur}") )
+            return 0
+            ;;
+        server)
+            [[ "${word2}" == "mc" ]] && COMPREPLY=( $(compgen -W "create ping status" -- "${cur}") )
             return 0
             ;;
         help)
-            COMREPLY=( $(compgen -W "help system pkg git setup" -- "${cur}") )
+            COMPREPLY=( $(compgen -W "help system pkg git setup mc" -- "${cur}") )
             return 0
             ;;
     esac
+
+    if [[ "${word2}" == "mc" && "${word3}" == "resource_pack" ]]; then
+        COMPREPLY=( $(compgen -W "create fetch pack add" -- "${cur}") )
+    elif [[ "${word2}" == "mc" && "${word3}" == "server" ]]; then
+        COMPREPLY=( $(compgen -W "create ping status" -- "${cur}") )
+    fi
 }
 
 complete -F _proto_completion proto
@@ -153,6 +173,7 @@ _proto() {
         'pkg:Cross-distro package manager wrapper'
         'git:Git workflow enhancements'
         'setup:Interactive configuration wizard'
+        'mc:Minecraft utilities'
     )
 
     local -a pkg_actions
@@ -173,6 +194,27 @@ _proto() {
         'branch:Show branches'
     )
 
+    local -a mc_actions
+    mc_actions=(
+        'resource_pack:Resource pack utilities'
+        'server:Server management'
+    )
+
+    local -a rp_actions
+    rp_actions=(
+        'create:Create a resource pack'
+        'fetch:Fetch versions'
+        'pack:Pack into zip'
+        'add:Add an asset'
+    )
+
+    local -a server_actions
+    server_actions=(
+        'create:Create a server'
+        'ping:Ping a server'
+        'status:Server status'
+    )
+
     _arguments -C \
         '--version[Print version]' \
         '--help[Print help]' \
@@ -188,6 +230,17 @@ _proto() {
                 git)
                     _describe -t actions 'git action' git_actions
                     ;;
+                mc)
+                    _describe -t actions 'mc action' mc_actions
+                    ;;
+            esac
+            case $words[2] in
+                resource_pack)
+                    _describe -t actions 'resource_pack' rp_actions
+                    ;;
+                server)
+                    _describe -t actions 'server' server_actions
+                    ;;
             esac
             ;;
     esac
@@ -200,28 +253,37 @@ _proto "$@"
 fn generate_fish_completion() -> String {
     r#"complete -c proto -f
 
-# Main commands
 complete -c proto -n "__fish_use_subcommand" -a help -d "Show help for commands"
 complete -c proto -n "__fish_use_subcommand" -a system -d "Display system information"
 complete -c proto -n "__fish_use_subcommand" -a pkg -d "Cross-distro package manager wrapper"
 complete -c proto -n "__fish_use_subcommand" -a git -d "Git workflow enhancements"
 complete -c proto -n "__fish_use_subcommand" -a setup -d "Interactive configuration wizard"
+complete -c proto -n "__fish_use_subcommand" -a mc -d "Minecraft utilities"
 
-# pkg subcommands
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a install -d "Install packages"
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a search -d "Search packages"
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a remove -d "Remove packages"
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a update -d "Update packages"
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a list -d "List installed packages"
 
-# git subcommands
 complete -c proto -n "__fish_seen_subcommand_from git" -a log -d "Show pretty git log"
 complete -c proto -n "__fish_seen_subcommand_from git" -a stats -d "Show repo statistics"
 complete -c proto -n "__fish_seen_subcommand_from git" -a save -d "Quick WIP commit"
 complete -c proto -n "__fish_seen_subcommand_from git" -a undo -d "Undo last commit"
 complete -c proto -n "__fish_seen_subcommand_from git" -a branch -d "Show branches"
 
-# Flags
+complete -c proto -n "__fish_seen_subcommand_from mc" -a resource_pack -d "Resource pack utilities"
+complete -c proto -n "__fish_seen_subcommand_from mc" -a server -d "Server management"
+
+complete -c proto -n "__fish_seen_subcommand_from mc server" -a create -d "Create a server"
+complete -c proto -n "__fish_seen_subcommand_from mc server" -a ping -d "Ping a server"
+complete -c proto -n "__fish_seen_subcommand_from mc server" -a status -d "Server status"
+
+complete -c proto -n "__fish_seen_subcommand_from mc resource_pack" -a create -d "Create a resource pack"
+complete -c proto -n "__fish_seen_subcommand_from mc resource_pack" -a fetch -d "Fetch versions"
+complete -c proto -n "__fish_seen_subcommand_from mc resource_pack" -a pack -d "Pack into zip"
+complete -c proto -n "__fish_seen_subcommand_from mc resource_pack" -a add -d "Add an asset"
+
 complete -c proto -l version -d "Print version"
 complete -c proto -l help -d "Print help"
 "#.to_string()
