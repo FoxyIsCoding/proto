@@ -212,22 +212,50 @@ fn share_with_vnc() {
     let mut ngrok_pid: Option<u32> = None;
 
     if crate::utils::which("ngrok") {
-        let sp2 = style::Spinner::new("Starting ngrok...");
+        let sp2 = style::Spinner::new("Starting ngrok tunnel...");
         if let Ok(mut t) = std::process::Command::new("ngrok")
             .args(["http", &web_port.to_string(), "--log", "stdout"])
-            .stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).spawn()
+            .stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped())
+            .spawn()
         {
-            ngrok_pid = Some(t.id());
+            let pid = t.id();
+            ngrok_pid = Some(pid);
+
+            let stderr = t.stderr.take();
+            std::thread::spawn(move || {
+                use std::io::BufRead;
+                if let Some(reader) = stderr {
+                    for line in BufReader::new(reader).lines().flatten() {
+                        if line.contains("ERR_NGROK") {
+                            eprintln!("\n{} ngrok: {}", style::warn(""), line);
+                        }
+                    }
+                }
+            });
+
             use std::io::{BufRead, BufReader};
             for line in BufReader::new(t.stdout.take().unwrap()).lines().flatten() {
                 if let Some(url) = parse_ngrok_url(&line) { public_url = url; break; }
-                if line.contains("ERR_NGROK") || line.contains("failed") {
-                    sp2.fail("ngrok: set auth token first (ngrok config add-authtoken)");
-                    let _ = t.kill(); ngrok_pid = None; break;
+                if line.contains("ERR_NGROK") || line.contains("failed to start tunnel") {
+                    sp2.fail(&format!("ngrok: {}", line.chars().take(80).collect::<String>()));
+                    let _ = std::process::Command::new("kill").arg(pid.to_string()).status();
+                    ngrok_pid = None;
+                    break;
                 }
             }
-            if !public_url.is_empty() { sp2.done("Tunnel ready"); }
-            else if ngrok_pid.is_some() { sp2.fail("ngrok timed out"); let _ = t.kill(); ngrok_pid = None; }
+
+            if !public_url.is_empty() {
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                let still_alive = std::process::Command::new("kill").arg("-0").arg(pid.to_string())
+                    .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null())
+                    .status().map(|s| s.success()).unwrap_or(false);
+                if still_alive { sp2.done("Tunnel ready"); }
+                else { sp2.fail("ngrok exited early (check auth token)"); public_url.clear(); ngrok_pid = None; }
+            } else if ngrok_pid.is_some() {
+                sp2.fail("ngrok timed out");
+                let _ = std::process::Command::new("kill").arg(pid.to_string()).status();
+                ngrok_pid = None;
+            }
         } else { sp2.fail("Failed to start ngrok"); }
     }
 
