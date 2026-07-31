@@ -36,6 +36,7 @@ fn print_general_help() {
     print_cmd("setup", "", "Interactive configuration wizard");
     print_cmd("mc", "resource_pack|server", "Minecraft resource packs & servers");
     print_cmd("status", "ping|monitor|serve|report", "Network monitoring tools");
+    print_cmd("discord", "bot|quest", "Discord bot creator & tools");
 
     println!("\n{}", "FLAGS:".style(style::Theme::HEADER));
     print_cmd("--version", "", "Print version and exit");
@@ -124,6 +125,17 @@ fn print_command_help(command: &str) {
             println!("  -n, --interval SECONDS    Poll interval (default: 5)");
             println!("  -p, --port PORT           Dashboard port (default: 5050)");
             println!("  -o, --output FILE         Report output path");
+        }
+        "discord" => {
+            println!("{}", "proto discord".style(style::Theme::HEADER));
+            println!("  Discord bot & quest utilities.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto discord bot create   Interactive bot project generator");
+            println!("  proto discord quest        Quest completion injector (WIP)\n");
+            println!("{}", "BOT CREATE OPTIONS:".style(style::Theme::HEADER));
+            println!("  --language    python|rust|javascript|typescript|csharp|cpp");
+            println!("  --template    slash_command|prefix|repeater|counter|none");
+            println!("\n{} Templates include full runnable code, env config, and deps.", "  ".dimmed());
         }
         other => {
             println!("{} Unknown command: '{}'", style::error(""), other.style(style::Theme::ACCENT));

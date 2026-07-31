@@ -6,4 +6,5 @@ pub mod setup;
 pub mod mc;
 pub mod mc_server;
 pub mod status;
+pub mod discord;
 pub mod template;

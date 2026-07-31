@@ -54,6 +54,11 @@ pub enum Commands {
         #[command(subcommand)]
         action: commands::status::StatusAction,
     },
+    #[command(about = "Discord bot & quest utilities")]
+    Discord {
+        #[command(subcommand)]
+        action: commands::discord::DiscordAction,
+    },
 }
 
 pub fn run(cli: Cli) {
@@ -80,6 +85,7 @@ pub fn run(cli: Cli) {
         Some(Commands::Setup) => commands::setup::run(),
         Some(Commands::Mc { action }) => commands::mc::run(&action),
         Some(Commands::Status { action }) => commands::status::run(&action),
+        Some(Commands::Discord { action }) => commands::discord::run(&action),
         None => {
             commands::help::run(&commands::help::HelpAction::All);
         }
