@@ -264,41 +264,92 @@ fn explain() {
         return;
     }
 
-    let hist_file = dirs::home_dir().unwrap_or_default().join(".proto_last_error");
+    println!("{} {}", "◆".style(style::Theme::ACCENT), "AI Shell Wrapper".style(style::Theme::HEADER));
+    println!("{} Run commands. Errors get auto-explained. /quit to exit.", "  ".dimmed());
+    println!("{}", style::divider());
 
-    if !hist_file.exists() {
-        eprintln!("{} No recent error captured.", style::warn(""));
-        eprintln!("  Run a command that fails, then run {}", "proto ai explain".style(style::Theme::ACCENT));
-        return;
-    }
+    let cwd = std::env::current_dir().unwrap_or_default();
 
-    let error_text = std::fs::read_to_string(&hist_file).unwrap_or_default();
-    if error_text.trim().is_empty() {
-        eprintln!("{} No error content found.", style::warn(""));
-        return;
-    }
+    loop {
+        use std::io::{Write, BufRead};
+        let dir_name = cwd.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "?".into());
+        print!("{} {} ", dir_name.style(style::Theme::ACCENT).bold(), "›".style(style::Theme::MUTED));
+        let _ = std::io::stdout().flush();
 
-    println!("{} Analyzing last error...", "◆".style(style::Theme::ACCENT));
+        let stdin = std::io::stdin();
+        let mut line = String::new();
+        if stdin.lock().read_line(&mut line).is_err() { break; }
+        let cmd = line.trim().to_string();
 
-    let system = "You are a terminal error explainer. Given stderr output from a failed command, explain what went wrong in plain English and suggest the most likely fix. Be concise. Use code blocks for commands.".to_string();
+        if cmd.is_empty() { continue; }
+        if cmd == "/quit" || cmd == "/exit" { break; }
+        if cmd == "/clear" { print!("\x1b[2J\x1b[H"); continue; }
 
-    let prompt = format!("This command failed with the following error output:\n\n```\n{}\n```\n\nExplain what happened and how to fix it.", error_text);
-
-    let messages = vec![
-        ("system".into(), system),
-        ("user".into(), prompt),
-    ];
-
-    let sp = style::Spinner::new("Asking AI...");
-    match call_ai(&config, &messages) {
-        Ok(response) => {
-            sp.done("");
-            println!("\n{}", response);
+        if cmd.starts_with("cd ") {
+            let new_dir = cmd[3..].trim().trim_matches(&['"', '\''][..]);
+            let target = if new_dir.starts_with('~') {
+                dirs::home_dir().unwrap_or_default().join(&new_dir[1..].trim_start_matches('/'))
+            } else if new_dir.starts_with('/') {
+                std::path::PathBuf::from(new_dir)
+            } else {
+                cwd.join(new_dir)
+            };
+            if target.is_dir() { let _ = std::env::set_current_dir(&target); }
+            else { eprintln!("{} Not a directory: {}", style::warn(""), target.display()); }
+            continue;
         }
-        Err(e) => {
-            sp.fail(&e);
+
+        let output = std::process::Command::new("sh")
+            .arg("-c").arg(&cmd)
+            .current_dir(&cwd)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .output();
+
+        match output {
+            Ok(out) => {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                let stderr = String::from_utf8_lossy(&out.stderr);
+
+                if !stdout.is_empty() { print!("{}", stdout); }
+
+                if out.status.success() {
+                    if !stderr.is_empty() { eprint!("{}", stderr.as_ref().dimmed()); }
+                } else {
+                    if !stderr.is_empty() {
+                        eprint!("{}", stderr.as_ref().style(style::Theme::ERROR));
+                    }
+
+                    let hist_file = dirs::home_dir().unwrap_or_default().join(".proto_last_error");
+                    let _ = std::fs::write(&hist_file, stderr.as_bytes());
+
+                    let combined_err = if stderr.is_empty() { format!("Exit code: {}", out.status.code().unwrap_or(-1)) } else { stderr.to_string() };
+
+                    println!("\n{} Analyzing error...", "  ".dimmed());
+
+                    let system = "You are a terminal error explainer. Given the stderr output from a failed shell command, explain what went wrong in plain English and suggest the most likely fix command. Be super concise — one or two sentences then the fix command in a code block. Do not ask questions or make conversation.".to_string();
+
+                    let prompt = format!("Command: `{}`\n\nStderr:\n```\n{}\n```", cmd, combined_err);
+
+                    let messages = vec![("system".into(), system), ("user".into(), prompt)];
+                    match call_ai(&config, &messages) {
+                        Ok(response) => {
+                            println!("\n{} {}\n", "▸".style(style::Theme::SUCCESS).bold(), response.trim());
+                        }
+                        Err(e) => {
+                            eprintln!("\n{} AI: {}", style::error(""), e);
+                        }
+                    }
+                    println!("{}", style::divider());
+                }
+            }
+            Err(e) => {
+                eprintln!("{} Failed to run: {}", style::error(""), e);
+            }
         }
     }
+
+    println!("\n{} Shell session ended.", "  ".dimmed());
 }
 
 fn call_ai(config: &AiConfig, messages: &[(String, String)]) -> Result<String, String> {
