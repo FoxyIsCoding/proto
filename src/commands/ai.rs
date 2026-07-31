@@ -280,12 +280,12 @@ fn explain() {
     println!("{} /quit to exit, /clear to clear screen.", "  ".dimmed());
     println!("{}", style::divider());
 
-    let cwd = std::env::current_dir().unwrap_or_default();
+    let mut cwd = std::env::current_dir().unwrap_or_default();
 
     loop {
         use std::io::{Write, BufRead};
-        let dir_name = cwd.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "?".into());
-        print!("{} {} ", dir_name.style(style::Theme::ACCENT).bold(), "›".style(style::Theme::MUTED));
+        let prompt = build_prompt(&cwd);
+        print!("{}", prompt);
         let _ = std::io::stdout().flush();
 
         let stdin = std::io::stdin();
@@ -306,7 +306,10 @@ fn explain() {
             } else {
                 cwd.join(new_dir)
             };
-            if target.is_dir() { let _ = std::env::set_current_dir(&target); }
+            if target.is_dir() {
+                let _ = std::env::set_current_dir(&target);
+                cwd = target;
+            }
             else { eprintln!("{} Not a directory: {}", style::warn(""), target.display()); }
             continue;
         }
@@ -322,10 +325,11 @@ fn explain() {
             Ok(out) => {
                 let stdout = String::from_utf8_lossy(&out.stdout);
                 let stderr = String::from_utf8_lossy(&out.stderr);
+                let exit_code = out.status.code().unwrap_or(-1);
 
                 if !stdout.is_empty() { print!("{}", stdout); }
 
-                if out.status.success() {
+                if exit_code == 0 {
                     if !stderr.is_empty() { eprint!("{}", stderr.as_ref().dimmed()); }
                 } else {
                     if !stderr.is_empty() {
@@ -335,9 +339,10 @@ fn explain() {
                     let hist_file = dirs::home_dir().unwrap_or_default().join(".proto_last_error");
                     let _ = std::fs::write(&hist_file, stderr.as_bytes());
 
-                    let combined_err = if stderr.is_empty() { format!("Exit code: {}", out.status.code().unwrap_or(-1)) } else { stderr.to_string() };
+                    let combined_err = if stderr.is_empty() { format!("Exit code: {}", exit_code) } else { stderr.to_string() };
 
-                    println!("\n{} Analyzing error...", "  ".dimmed());
+                    println!("\n{} {}", "  ".dimmed(), format!("exit {}", exit_code).red().bold().to_string());
+                    println!("{} Analyzing error...", "  ".dimmed());
 
                     let system = "You are a terminal error explainer. Given the stderr output from a failed shell command, explain what went wrong in plain English and suggest the most likely fix command. Be super concise — one or two sentences then the fix command in a code block. Do not ask questions or make conversation.".to_string();
 
@@ -362,6 +367,40 @@ fn explain() {
     }
 
     println!("\n{} Shell session ended.", "  ".dimmed());
+}
+
+fn build_prompt(cwd: &std::path::Path) -> String {
+    let home = dirs::home_dir().unwrap_or_default();
+
+    let path_str = if let Ok(rel) = cwd.strip_prefix(&home) {
+        format!("~/{}", rel.to_string_lossy())
+    } else {
+        cwd.to_string_lossy().to_string()
+    };
+
+    let mut prompt = path_str.style(style::Theme::ACCENT).bold().to_string();
+
+    if let Some(branch) = git_branch(cwd) {
+        prompt.push_str(&format!(" {}",
+            format!("on  {}", branch).style(style::Theme::MUTED)
+        ));
+    }
+
+    prompt.push_str(&format!(" {} ", "❯".cyan().bold()));
+    prompt
+}
+
+fn git_branch(cwd: &std::path::Path) -> Option<String> {
+    let output = std::process::Command::new("git")
+        .args(["branch", "--show-current"])
+        .current_dir(cwd)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+
+    let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if branch.is_empty() { None } else { Some(branch) }
 }
 
 fn call_ai(config: &AiConfig, messages: &[(String, String)]) -> Result<String, String> {
