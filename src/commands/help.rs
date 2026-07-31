@@ -76,6 +76,11 @@ fn print_command_help(command: &str) {
             println!("  proto pkg remove <pkg>      Remove a package");
             println!("  proto pkg update [pkg]      Update all or specific packages");
             println!("  proto pkg list              List installed packages\n");
+            println!("{}", "BUILD:".style(style::Theme::HEADER));
+            println!("  proto pkg build pack create Interactive pack config creator");
+            println!("  proto pkg build pack edit   Edit existing pack config");
+            println!("  proto pkg build pack build  Generate portable installer");
+            println!("  proto pkg build pack test   Dry-run pack config\n");
             println!("{}", "SUPPORTED:".style(style::Theme::HEADER));
             println!("  pacman, yay, paru, apt, dnf, zypper, apk");
         }
