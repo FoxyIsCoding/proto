@@ -89,11 +89,15 @@ fn print_command_help(command: &str) {
             println!("{}", "proto share-session".style(style::Theme::HEADER));
             println!("  Share your terminal for pair programming.\n");
             println!("{}", "USAGE:".style(style::Theme::HEADER));
-            println!("  proto share-session create    Start a shareable session");
-            println!("  proto share-session join <LINK>  Join a shared session\n");
+            println!("  proto share-session create [--backend sshx|tmate|tmux]");
+            println!("  proto share-session join <LINK>\n");
             println!("{}", "BACKENDS:".style(style::Theme::HEADER));
-            println!("  tmate (preferred) — generates SSH + web links, works remotely");
-            println!("  tmux — local-only, teammate SSHs in and attaches");
+            println!("  sshx  — web link, viewer opens in browser (teamviewer-style)");
+            println!("  tmate — SSH + web link, works remotely (needs tmate.io)");
+            println!("  tmux  — local-only, teammate must SSH in\n");
+            println!("{}", "INSTALL:".style(style::Theme::HEADER));
+            println!("  cargo install sshx");
+            println!("  sudo pacman -S tmate tmux");
         }
         "pkg" => {
             println!("{}", "proto pkg".style(style::Theme::HEADER));
