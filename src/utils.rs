@@ -117,7 +117,6 @@ pub fn default_package_manager() -> PackageManager {
     }
     managers.into_iter().next().unwrap_or(PackageManager::Unknown)
 }
-
 pub fn which(binary: &str) -> bool {
     Command::new("which")
         .arg(binary)
@@ -126,6 +125,20 @@ pub fn which(binary: &str) -> bool {
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
+}
+
+pub fn format_size(bytes: u64) -> String {
+    const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
+    if bytes < 1024 {
+        return format!("{} B", bytes);
+    }
+    let mut v = bytes as f64;
+    let mut i = 0;
+    while v >= 1024.0 && i < UNITS.len() - 1 {
+        v /= 1024.0;
+        i += 1;
+    }
+    format!("{:.1} {}", v, UNITS[i])
 }
 
 pub fn run_command(program: &str, args: &[&str]) -> std::io::Result<std::process::ExitStatus> {

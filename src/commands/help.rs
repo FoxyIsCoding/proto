@@ -97,6 +97,17 @@ fn print_general_help() {
     );
     print_cmd("git-impact", "", "Branch risk score before merging");
     print_cmd("git-catchup", "", "What changed upstream since your pull");
+    print_cmd("share", "<FILE>", "Upload file to a temporary host");
+    print_cmd("dedupe", "[DIR]", "Find and remove exact duplicates");
+    print_cmd("media", "shrink", "Compress images/videos in place");
+    print_cmd("cert-check", "<DOMAIN>", "Inspect a remote TLS certificate");
+    print_cmd("dns-lookup", "<DOMAIN>", "Query all DNS records at once");
+    print_cmd("local-s3", "", "Spin up an ephemeral MinIO server");
+    print_cmd(
+        "port-forward",
+        "<LOCAL:HOST:REMOTE>",
+        "SSH forwarding with auto-retry",
+    );
 
     println!("\n{}", "FLAGS:".style(style::Theme::HEADER));
     print_cmd("--version", "", "Print version and exit");
@@ -346,6 +357,84 @@ fn print_command_help(command: &str) {
             println!("{}", "SHOWS:".style(style::Theme::HEADER));
             println!("  Commits behind, files changed, docs updated, and merged PRs");
             println!("  (via gh) on the default branch.");
+        }
+        "share" => {
+            println!("{}", "proto share".style(style::Theme::HEADER));
+            println!("  Upload a file to a temporary, self-expiring host.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto share <FILE>\n");
+            println!("{}", "FEATURES:".style(style::Theme::HEADER));
+            println!("  Asks for confirmation before uploading");
+            println!("  Renders image previews in kitty/other image terminals");
+            println!("  Copies the download URL to your clipboard");
+            println!("  Falls back across bashupload.com, file.io, tmpfiles.org\n");
+            println!("{}", "NOTES:".style(style::Theme::HEADER));
+            println!("  Files expire after a few days or a limited number of downloads.");
+            println!("  Treat links as ephemeral — don't share sensitive data.");
+        }
+        "dedupe" => {
+            println!("{}", "proto dedupe".style(style::Theme::HEADER));
+            println!("  Find exact duplicate files by content hash (not just name).\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto dedupe [DIR]     Scan a directory (default: current)\n");
+            println!("{}", "FLOW:".style(style::Theme::HEADER));
+            println!("  1. Groups files by size, then SHA-256 hashes candidates");
+            println!("  2. For each group, choose: skip, delete, or symlink duplicates");
+            println!("  3. Symlinks point to the kept file (relative paths, portable)");
+        }
+        "media" => {
+            println!("{}", "proto media".style(style::Theme::HEADER));
+            println!("  Compress media files in place using system tools.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto media shrink [FILE|DIR]   Default: current directory\n");
+            println!("{}", "FORMATS & TOOLS:".style(style::Theme::HEADER));
+            println!("  png   → optipng / pngcrush (lossless)");
+            println!("  jpg   → jpegoptim --strip-all (lossless)");
+            println!("  webp  → cwebp -lossless");
+            println!("  video → ffmpeg (h264 crf 18, keeps audio)");
+            println!("  Files are only replaced when the result is smaller.");
+        }
+        "cert-check" => {
+            println!("{}", "proto cert-check".style(style::Theme::HEADER));
+            println!("  Inspect the TLS certificate of a remote server.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto cert-check example.com\n");
+            println!("{}", "SHOWS:".style(style::Theme::HEADER));
+            println!("  Subject, issuer, validity window, days remaining,");
+            println!("  and SAN domains. Warns when expiry is near.");
+            println!("  Uses openssl s_client under the hood (port 443).");
+        }
+        "dns-lookup" => {
+            println!("{}", "proto dns-lookup".style(style::Theme::HEADER));
+            println!("  One-shot DNS diagnostic.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto dns-lookup example.com\n");
+            println!("{}", "QUERIES:".style(style::Theme::HEADER));
+            println!("  A, AAAA, CNAME, MX, TXT, and NS records in one table.");
+            println!("  Requires dig (bind-tools).");
+        }
+        "local-s3" => {
+            println!("{}", "proto local-s3".style(style::Theme::HEADER));
+            println!("  Spin up an ephemeral local S3-compatible server.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto local-s3\n");
+            println!("{}", "ENGINE:".style(style::Theme::HEADER));
+            println!("  Uses a minio binary or Docker (minio/minio) automatically.");
+            println!("  Data lives in ./.proto-s3-data; Ctrl+C stops the server.");
+            println!("  Prints ready-to-use aws cli and mc commands.");
+        }
+        "port-forward" => {
+            println!("{}", "proto port-forward".style(style::Theme::HEADER));
+            println!("  SSH port forwarding wrapper with auto-retry.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto port-forward 8080:user@host:5432");
+            println!("  proto port-forward 3000:db.example.com:5432\n");
+            println!("{}", "OPTIONS:".style(style::Theme::HEADER));
+            println!("  --retries N      Reconnect attempts (default: 3, 0 = unlimited)");
+            println!("  --interval SECS  Health check interval (default: 5)\n");
+            println!("{}", "FEATURES:".style(style::Theme::HEADER));
+            println!("  Auto-reconnects dropped connections, monitors the local");
+            println!("  port and shows UP/DOWN status changes.");
         }
         other => {
             println!(

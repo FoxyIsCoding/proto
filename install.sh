@@ -134,7 +134,7 @@ _proto_completion() {
     word2="${COMP_WORDS[2]}"
     word3="${COMP_WORDS[3]}"
 
-    local commands="help system alias share-session pkg git setup mc status discord convert encrypt app ai copy-ctx memo secret webhook pr-prep pr-checkout git-who-broke git-impact git-catchup"
+    local commands="help system alias share-session pkg git setup mc status discord convert encrypt app ai copy-ctx memo secret webhook pr-prep pr-checkout git-who-broke git-impact git-catchup share dedupe media cert-check dns-lookup local-s3 port-forward"
     local pkg_actions="install search remove update list build"
     local pack_actions="create edit build test"
     local git_actions="log stats save undo branch"
@@ -147,6 +147,7 @@ _proto_completion() {
     local ai_actions="setup chat summarize explain"
     local memo_actions="add list clear"
     local alias_actions="create list remove"
+    local media_actions="shrink"
 
     case "${prev}" in
         proto) COMPREPLY=( $(compgen -W "${commands}" -- "${cur}") ); return 0 ;;
@@ -170,6 +171,7 @@ _proto_completion() {
         share-session) COMPREPLY=( $(compgen -W "create join" -- "${cur}") ); return 0 ;;
         secret) COMPREPLY=( $(compgen -W "mask" -- "${cur}") ); return 0 ;;
         webhook) COMPREPLY=( $(compgen -W "listen" -- "${cur}") ); return 0 ;;
+        media) COMPREPLY=( $(compgen -W "${media_actions}" -- "${cur}") ); return 0 ;;
         help) COMPREPLY=( $(compgen -W "${commands}" -- "${cur}") ); return 0 ;;
     esac
 
@@ -219,6 +221,13 @@ _proto() {
         'git-who-broke:Bisect to find breaking commit'
         'git-impact:Branch risk score'
         'git-catchup:Upstream changes since last pull'
+        'share:Upload file to a temporary host'
+        'dedupe:Find exact duplicate files'
+        'media:Compress images/videos in place'
+        'cert-check:Inspect a remote TLS certificate'
+        'dns-lookup:Query DNS records'
+        'local-s3:Spin up an ephemeral MinIO server'
+        'port-forward:SSH port forwarding with auto-retry'
     )
     local -a pkg_actions
     pkg_actions=(
@@ -303,6 +312,10 @@ _proto() {
         'list:List aliases'
         'remove:Remove an alias'
     )
+    local -a media_actions
+    media_actions=(
+        'shrink:Compress media files'
+    )
     _arguments -C \
         '--version[Print version]' \
         '--help[Print help]' \
@@ -320,6 +333,7 @@ _proto() {
                 ai) _describe -t actions 'ai action' ai_actions ;;
                 memo) _describe -t actions 'memo action' memo_actions ;;
                 alias) _describe -t actions 'alias action' alias_actions ;;
+                media) _describe -t actions 'media action' media_actions ;;
             esac
             case $words[2] in
                 resource_pack) _describe -t actions 'resource_pack' rp_actions ;;
@@ -361,6 +375,13 @@ complete -c proto -n "__fish_use_subcommand" -a pr-checkout -d "Check out a PR l
 complete -c proto -n "__fish_use_subcommand" -a git-who-broke -d "Bisect to find breaking commit"
 complete -c proto -n "__fish_use_subcommand" -a git-impact -d "Branch risk score"
 complete -c proto -n "__fish_use_subcommand" -a git-catchup -d "Upstream changes since last pull"
+complete -c proto -n "__fish_use_subcommand" -a share -d "Upload file to a temporary host"
+complete -c proto -n "__fish_use_subcommand" -a dedupe -d "Find exact duplicate files"
+complete -c proto -n "__fish_use_subcommand" -a media -d "Compress images/videos in place"
+complete -c proto -n "__fish_use_subcommand" -a cert-check -d "Inspect a remote TLS certificate"
+complete -c proto -n "__fish_use_subcommand" -a dns-lookup -d "Query DNS records"
+complete -c proto -n "__fish_use_subcommand" -a local-s3 -d "Spin up an ephemeral MinIO server"
+complete -c proto -n "__fish_use_subcommand" -a port-forward -d "SSH port forwarding with auto-retry"
 
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a install -d "Install packages"
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a search -d "Search packages"
@@ -434,6 +455,8 @@ complete -c proto -n "__fish_seen_subcommand_from share-session" -a join -d "Joi
 complete -c proto -n "__fish_seen_subcommand_from secret" -a mask -d "Scan and mask secrets"
 
 complete -c proto -n "__fish_seen_subcommand_from webhook" -a listen -d "Listen for webhooks"
+
+complete -c proto -n "__fish_seen_subcommand_from media" -a shrink -d "Compress media files"
 
 complete -c proto -l version -d "Print version"
 complete -c proto -l help -d "Print help"

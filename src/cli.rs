@@ -164,6 +164,69 @@ pub enum Commands {
         about = "Show what changed upstream since your last pull"
     )]
     GitCatchup,
+    #[command(
+        name = "share",
+        about = "Upload a file to a temporary, self-expiring host"
+    )]
+    Share {
+        #[arg(required = true, value_name = "FILE")]
+        file: String,
+    },
+    #[command(about = "Find exact duplicate files by content hash")]
+    Dedupe {
+        #[arg(
+            value_name = "DIR",
+            default_value = ".",
+            help = "Directory to scan (default: current directory)"
+        )]
+        dir: String,
+    },
+    #[command(about = "Compress images and videos in place")]
+    Media {
+        #[command(subcommand)]
+        action: commands::media::MediaAction,
+    },
+    #[command(
+        name = "cert-check",
+        about = "Inspect the TLS certificate of a remote server"
+    )]
+    CertCheck {
+        #[arg(required = true, value_name = "DOMAIN")]
+        domain: String,
+    },
+    #[command(
+        name = "dns-lookup",
+        about = "Query A, AAAA, MX, TXT, CNAME, and NS records at once"
+    )]
+    DnsLookup {
+        #[arg(required = true, value_name = "DOMAIN")]
+        domain: String,
+    },
+    #[command(
+        name = "local-s3",
+        about = "Spin up an ephemeral local S3-compatible server (MinIO)"
+    )]
+    LocalS3,
+    #[command(
+        name = "port-forward",
+        about = "SSH port forwarding with auto-retry and health monitoring"
+    )]
+    PortForward {
+        #[arg(
+            required = true,
+            value_name = "LOCAL:user@host:REMOTE",
+            help = "e.g. 8080:user@host:5432"
+        )]
+        spec: String,
+        #[arg(long, default_value_t = 3, help = "Reconnect attempts (0 = unlimited)")]
+        retries: usize,
+        #[arg(
+            long,
+            default_value_t = 5,
+            help = "Health check interval in seconds"
+        )]
+        interval: u64,
+    },
 }
 
 pub fn run(cli: Cli) {
@@ -218,6 +281,17 @@ pub fn run(cli: Cli) {
         Some(Commands::GitWhoBroke { command }) => commands::git_extras::who_broke(&command),
         Some(Commands::GitImpact) => commands::git_extras::impact(),
         Some(Commands::GitCatchup) => commands::git_extras::catchup(),
+        Some(Commands::Share { file }) => commands::upload::run(&file),
+        Some(Commands::Dedupe { dir }) => commands::dedupe::run(&dir),
+        Some(Commands::Media { action }) => commands::media::run(&action),
+        Some(Commands::CertCheck { domain }) => commands::cert::run(&domain),
+        Some(Commands::DnsLookup { domain }) => commands::dns::run(&domain),
+        Some(Commands::LocalS3) => commands::locals3::run(),
+        Some(Commands::PortForward {
+            spec,
+            retries,
+            interval,
+        }) => commands::portfwd::run(&spec, retries, interval),
         None => {
             commands::help::run(&commands::help::HelpAction::All);
         }
