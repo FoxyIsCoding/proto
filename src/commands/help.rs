@@ -1,6 +1,6 @@
+use crate::style;
 use clap::Subcommand;
 use owo_colors::OwoColorize;
-use crate::style;
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum HelpAction {
@@ -23,32 +23,90 @@ pub fn run(action: &HelpAction) {
 fn print_general_help() {
     println!("{}", style::proto_banner());
     println!("{}\n", "Proto CLI".style(style::Theme::HEADER).bold());
-    println!("{}  {}", "◆".style(style::Theme::ACCENT), "Your friendly protogen CLI companion\n".style(style::Theme::MUTED));
+    println!(
+        "{}  {}",
+        "◆".style(style::Theme::ACCENT),
+        "Your friendly protogen CLI companion\n".style(style::Theme::MUTED)
+    );
 
     println!("{}", "USAGE:".style(style::Theme::HEADER));
-    println!("  {} <command> [options]\n", "proto".style(style::Theme::ACCENT));
+    println!(
+        "  {} <command> [options]\n",
+        "proto".style(style::Theme::ACCENT)
+    );
 
     println!("{}", "COMMANDS:".style(style::Theme::HEADER));
-    print_cmd("help", "[command]", "Show this help or help for a specific command");
+    print_cmd(
+        "help",
+        "[command]",
+        "Show this help or help for a specific command",
+    );
     print_cmd("system", "", "Display beautiful system information");
-    print_cmd("alias", "create|list|remove", "Interactive shell alias builder");
-    print_cmd("share-session", "create|join", "Share terminal via tmate/tmux");
+    print_cmd(
+        "alias",
+        "create|list|remove",
+        "Interactive shell alias builder",
+    );
+    print_cmd(
+        "share-session",
+        "create|join",
+        "Share terminal via tmate/tmux",
+    );
     print_cmd("pkg", "<action>", "Cross-distro package manager wrapper");
     print_cmd("git", "<action>", "Git workflow enhancements");
     print_cmd("setup", "", "Interactive configuration wizard");
-    print_cmd("mc", "resource_pack|server", "Minecraft resource packs & servers");
-    print_cmd("status", "ping|monitor|serve|report", "Network monitoring tools");
+    print_cmd(
+        "mc",
+        "resource_pack|server",
+        "Minecraft resource packs & servers",
+    );
+    print_cmd(
+        "status",
+        "ping|monitor|serve|report",
+        "Network monitoring tools",
+    );
     print_cmd("discord", "bot|quest", "Discord bot creator & tools");
-    print_cmd("app", "doctor|port|nuke|snap", "Project diagnostics & cleanup");
-    print_cmd("ai", "chat|setup|summarize|explain", "AI assistant & changelog generator");
-    print_cmd("copy-ctx", "", "Bundle repo into LLM-ready clipboard context");
+    print_cmd(
+        "app",
+        "doctor|port|nuke|snap",
+        "Project diagnostics & cleanup",
+    );
+    print_cmd(
+        "ai",
+        "chat|setup|summarize|explain",
+        "AI assistant & changelog generator",
+    );
+    print_cmd(
+        "copy-ctx",
+        "",
+        "Bundle repo into LLM-ready clipboard context",
+    );
     print_cmd("memo", "add|list|clear", "Location-aware scratchpad notes");
+    print_cmd("secret", "mask", "Scan history/logs for leaked secrets");
+    print_cmd("webhook", "listen", "Print webhooks as formatted JSON");
+    print_cmd("pr-prep", "", "Run tests, lint, format, open PR page");
+    print_cmd(
+        "pr-checkout",
+        "<PR#|URL>",
+        "Check out a PR into a temp branch",
+    );
+    print_cmd(
+        "git-who-broke",
+        "[test-cmd]",
+        "Bisect to find the breaking commit",
+    );
+    print_cmd("git-impact", "", "Branch risk score before merging");
+    print_cmd("git-catchup", "", "What changed upstream since your pull");
 
     println!("\n{}", "FLAGS:".style(style::Theme::HEADER));
     print_cmd("--version", "", "Print version and exit");
     print_cmd("--help", "", "Print help information");
 
-    println!("\n{} {}\n", "Run".style(style::Theme::MUTED), "'proto help <command>' for more info.".style(style::Theme::MUTED));
+    println!(
+        "\n{} {}\n",
+        "Run".style(style::Theme::MUTED),
+        "'proto help <command>' for more info.".style(style::Theme::MUTED)
+    );
 }
 
 fn print_command_help(command: &str) {
@@ -174,7 +232,10 @@ fn print_command_help(command: &str) {
             println!("{}", "BOT CREATE OPTIONS:".style(style::Theme::HEADER));
             println!("  --language    python|rust|javascript|typescript|csharp|cpp");
             println!("  --template    slash_command|prefix|repeater|counter|none");
-            println!("\n{} Templates include full runnable code, env config, and deps.", "  ".dimmed());
+            println!(
+                "\n{} Templates include full runnable code, env config, and deps.",
+                "  ".dimmed()
+            );
         }
         "app" => {
             println!("{}", "proto app".style(style::Theme::HEADER));
@@ -214,9 +275,88 @@ fn print_command_help(command: &str) {
             println!("  proto memo add <text>   Append a memo with timestamp");
             println!("  proto memo clear        Delete all memos (with confirmation)");
         }
+        "secret" => {
+            println!("{}", "proto secret".style(style::Theme::HEADER));
+            println!("  Scan shell history and log files for leaked credentials.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto secret mask                      Scan shell histories (default)");
+            println!("  proto secret mask --file <PATH>        Scan a specific file/directory");
+            println!("  proto secret mask --dry-run            Alert only, don't rewrite files\n");
+            println!("{}", "DETECTS:".style(style::Theme::HEADER));
+            println!("  AWS keys, GitHub tokens, OpenAI keys, Google API keys, Slack tokens,");
+            println!("  Stripe keys, JWTs, private keys, and generic secret assignments.");
+        }
+        "webhook" => {
+            println!("{}", "proto webhook".style(style::Theme::HEADER));
+            println!("  Listen for webhooks and print them as formatted JSON.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto webhook listen [PORT]    Listen on a port (default: 9000)");
+            println!("  proto webhook listen 8080 --no-tunnel   Skip the ngrok public URL\n");
+            println!("{}", "FEATURES:".style(style::Theme::HEADER));
+            println!("  Auto-opens an ngrok HTTP tunnel when available");
+            println!("  Colorized JSON output + request headers");
+        }
+        "pr-prep" => {
+            println!("{}", "proto pr-prep".style(style::Theme::HEADER));
+            println!("  One-command PR readiness check.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto pr-prep\n");
+            println!("{}", "STEPS:".style(style::Theme::HEADER));
+            println!("  1. Auto-format code (cargo fmt / prettier / ruff / gofmt)");
+            println!("  2. Run linter (clippy / lint script / ruff / go vet)");
+            println!("  3. Run tests (cargo test / npm test / pytest / go test)");
+            println!("  4. Scan changed files for console.log / print / TODO");
+            println!("  5. Open the PR create page in your browser\n");
+            println!("{}", "FLAGS:".style(style::Theme::HEADER));
+            println!("  --skip-tests  --skip-lint  --skip-fmt  --no-open");
+        }
+        "pr-checkout" => {
+            println!("{}", "proto pr-checkout".style(style::Theme::HEADER));
+            println!("  Check out a pull request locally into a temp branch.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto pr-checkout 42");
+            println!("  proto pr-checkout https://github.com/owner/repo/pull/42");
+            println!("  proto pr-checkout https://gitlab.com/owner/repo/-/merge_requests/42");
+            println!("  proto pr-checkout owner/repo#42\n");
+            println!("{}", "NOTES:".style(style::Theme::HEADER));
+            println!("  Creates branch pr-<N>; clones the repo first if not inside one.");
+        }
+        "git-who-broke" => {
+            println!("{}", "proto git-who-broke".style(style::Theme::HEADER));
+            println!("  Auto-bisect to pinpoint the commit that broke your tests.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!(
+                "  proto git-who-broke                    (auto: cargo test / npm test / pytest)"
+            );
+            println!("  proto git-who-broke cargo test -- --ignored\n");
+            println!("{}", "FLOW:".style(style::Theme::HEADER));
+            println!("  Stashes changes, finds a good commit, runs git bisect,");
+            println!("  then restores your branch and stash automatically.");
+        }
+        "git-impact" => {
+            println!("{}", "proto git-impact".style(style::Theme::HEADER));
+            println!("  Calculate branch risk before merging.\n");
+            println!("{}", "SHOWS:".style(style::Theme::HEADER));
+            println!("  Files changed with +adds/-dels, per-file risk tags,");
+            println!("  line churn, and a 0-100 blast-radius score with verdict.");
+        }
+        "git-catchup" => {
+            println!("{}", "proto git-catchup".style(style::Theme::HEADER));
+            println!("  Show everything that changed upstream since your last pull.\n");
+            println!("{}", "SHOWS:".style(style::Theme::HEADER));
+            println!("  Commits behind, files changed, docs updated, and merged PRs");
+            println!("  (via gh) on the default branch.");
+        }
         other => {
-            println!("{} Unknown command: '{}'", style::error(""), other.style(style::Theme::ACCENT));
-            println!("Run {} to see all available commands.", "proto help".style(style::Theme::ACCENT));
+            println!(
+                "{} Unknown command: '{}'",
+                style::error(""),
+                other.style(style::Theme::ACCENT)
+            );
+            println!(
+                "Run {} to see all available commands.",
+                "proto help".style(style::Theme::ACCENT)
+            );
         }
     }
 }
@@ -225,7 +365,15 @@ fn print_cmd(name: &str, args: &str, desc: &str) {
     let name_part = if args.is_empty() {
         format!("  {}          ", name.style(style::Theme::ACCENT))
     } else {
-        format!("  {} {}", name.style(style::Theme::ACCENT), args.style(style::Theme::BOLD))
+        format!(
+            "  {} {}",
+            name.style(style::Theme::ACCENT),
+            args.style(style::Theme::BOLD)
+        )
     };
-    println!("{}{}", format!("{:40}", name_part), desc.style(style::Theme::MUTED));
+    println!(
+        "{}{}",
+        format!("{:40}", name_part),
+        desc.style(style::Theme::MUTED)
+    );
 }

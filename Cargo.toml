@@ -26,3 +26,4 @@ sha1 = "0.10"
 md-5 = "0.10"
 uuid = { version = "1", features = ["v4"] }
 bcrypt = "0.15"
+regex = "1"

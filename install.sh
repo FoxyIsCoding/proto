@@ -134,37 +134,53 @@ _proto_completion() {
     word2="${COMP_WORDS[2]}"
     word3="${COMP_WORDS[3]}"
 
+    local commands="help system alias share-session pkg git setup mc status discord convert encrypt app ai copy-ctx memo secret webhook pr-prep pr-checkout git-who-broke git-impact git-catchup"
+    local pkg_actions="install search remove update list build"
+    local pack_actions="create edit build test"
+    local git_actions="log stats save undo branch"
+    local mc_actions="resource_pack server"
+    local rp_actions="create fetch pack add"
+    local server_actions="create ping status"
+    local status_actions="ping monitor serve report"
+    local encrypt_actions="base64 hex hash uuid bcrypt"
+    local app_actions="doctor port nuke snap"
+    local ai_actions="setup chat summarize explain"
+    local memo_actions="add list clear"
+    local alias_actions="create list remove"
+
     case "${prev}" in
-        proto)
-            COMPREPLY=( $(compgen -W "help system pkg git setup mc status" -- "${cur}") )
-            return 0 ;;
-        pkg)
-            COMPREPLY=( $(compgen -W "install search remove update list" -- "${cur}") )
-            return 0 ;;
-        git)
-            COMPREPLY=( $(compgen -W "log stats save undo branch" -- "${cur}") )
-            return 0 ;;
-        mc)
-            COMPREPLY=( $(compgen -W "resource_pack server" -- "${cur}") )
-            return 0 ;;
-        resource_pack)
-            COMPREPLY=( $(compgen -W "create fetch pack add" -- "${cur}") )
-            return 0 ;;
-        server)
-            [[ "${word2}" == "mc" ]] && COMPREPLY=( $(compgen -W "create ping status" -- "${cur}") )
-            return 0 ;;
-        status)
-            COMPREPLY=( $(compgen -W "ping monitor serve report" -- "${cur}") )
-            return 0 ;;
-        help)
-            COMPREPLY=( $(compgen -W "help system pkg git setup mc status" -- "${cur}") )
-            return 0 ;;
+        proto) COMPREPLY=( $(compgen -W "${commands}" -- "${cur}") ); return 0 ;;
+        pkg) COMPREPLY=( $(compgen -W "${pkg_actions}" -- "${cur}") ); return 0 ;;
+        build) COMPREPLY=( $(compgen -W "pack" -- "${cur}") ); return 0 ;;
+        pack) COMPREPLY=( $(compgen -W "${pack_actions}" -- "${cur}") ); return 0 ;;
+        git) COMPREPLY=( $(compgen -W "${git_actions}" -- "${cur}") ); return 0 ;;
+        mc) COMPREPLY=( $(compgen -W "${mc_actions}" -- "${cur}") ); return 0 ;;
+        resource_pack) COMPREPLY=( $(compgen -W "${rp_actions}" -- "${cur}") ); return 0 ;;
+        server) [[ "${word2}" == "mc" ]] && COMPREPLY=( $(compgen -W "${server_actions}" -- "${cur}") ); return 0 ;;
+        status) COMPREPLY=( $(compgen -W "${status_actions}" -- "${cur}") ); return 0 ;;
+        discord) COMPREPLY=( $(compgen -W "bot quest" -- "${cur}") ); return 0 ;;
+        bot) COMPREPLY=( $(compgen -W "create" -- "${cur}") ); return 0 ;;
+        encrypt) COMPREPLY=( $(compgen -W "${encrypt_actions}" -- "${cur}") ); return 0 ;;
+        app) COMPREPLY=( $(compgen -W "${app_actions}" -- "${cur}") ); return 0 ;;
+        port) COMPREPLY=( $(compgen -W "release" -- "${cur}") ); return 0 ;;
+        snap) COMPREPLY=( $(compgen -W "create restore view delete" -- "${cur}") ); return 0 ;;
+        ai) COMPREPLY=( $(compgen -W "${ai_actions}" -- "${cur}") ); return 0 ;;
+        memo) COMPREPLY=( $(compgen -W "${memo_actions}" -- "${cur}") ); return 0 ;;
+        alias) COMPREPLY=( $(compgen -W "${alias_actions}" -- "${cur}") ); return 0 ;;
+        share-session) COMPREPLY=( $(compgen -W "create join" -- "${cur}") ); return 0 ;;
+        secret) COMPREPLY=( $(compgen -W "mask" -- "${cur}") ); return 0 ;;
+        webhook) COMPREPLY=( $(compgen -W "listen" -- "${cur}") ); return 0 ;;
+        help) COMPREPLY=( $(compgen -W "${commands}" -- "${cur}") ); return 0 ;;
     esac
 
     if [[ "${word2}" == "mc" && "${word3}" == "resource_pack" ]]; then
-        COMPREPLY=( $(compgen -W "create fetch pack add" -- "${cur}") )
+        COMPREPLY=( $(compgen -W "${rp_actions}" -- "${cur}") )
     elif [[ "${word2}" == "mc" && "${word3}" == "server" ]]; then
-        COMPREPLY=( $(compgen -W "create ping status" -- "${cur}") )
+        COMPREPLY=( $(compgen -W "${server_actions}" -- "${cur}") )
+    elif [[ "${word2}" == "pkg" && "${word3}" == "build" ]]; then
+        COMPREPLY=( $(compgen -W "pack" -- "${cur}") )
+    elif [[ "${word2}" == "pkg" && "${word3}" == "pack" ]]; then
+        COMPREPLY=( $(compgen -W "${pack_actions}" -- "${cur}") )
     fi
 }
 complete -F _proto_completion proto
@@ -182,11 +198,27 @@ _proto() {
     commands=(
         'help:Show help for commands'
         'system:Display system information'
-        'pkg:Cross-distro package manager wrapper'
+        'alias:Interactive shell alias builder'
+        'share-session:Share terminal session'
+        'pkg:Package manager wrapper'
         'git:Git workflow enhancements'
         'setup:Interactive configuration wizard'
         'mc:Minecraft utilities'
         'status:Network monitoring'
+        'discord:Discord bot creator'
+        'convert:Convert units'
+        'encrypt:Encode/hash/generate crypto'
+        'app:Project diagnostics & cleanup'
+        'ai:AI assistant'
+        'copy-ctx:Bundle repo into clipboard context'
+        'memo:Location-aware memos'
+        'secret:Scan for leaked secrets'
+        'webhook:Listen for webhooks'
+        'pr-prep:PR readiness check'
+        'pr-checkout:Check out a PR locally'
+        'git-who-broke:Bisect to find breaking commit'
+        'git-impact:Branch risk score'
+        'git-catchup:Upstream changes since last pull'
     )
     local -a pkg_actions
     pkg_actions=(
@@ -195,6 +227,14 @@ _proto() {
         'remove:Remove packages'
         'update:Update packages'
         'list:List installed packages'
+        'build:Build pack tools'
+    )
+    local -a pack_actions
+    pack_actions=(
+        'create:Create pack config'
+        'edit:Edit pack config'
+        'build:Generate installer'
+        'test:Dry-run pack config'
     )
     local -a git_actions
     git_actions=(
@@ -229,6 +269,40 @@ _proto() {
         'serve:Web dashboard'
         'report:Generate report'
     )
+    local -a encrypt_actions
+    encrypt_actions=(
+        'base64:Base64 encode/decode'
+        'hex:Hex encode/decode'
+        'hash:Hash text'
+        'uuid:Generate UUID v4'
+        'bcrypt:Bcrypt hash a password'
+    )
+    local -a app_actions
+    app_actions=(
+        'doctor:Audit project health'
+        'port:Port management'
+        'nuke:Purge build artifacts'
+        'snap:Git snapshots'
+    )
+    local -a ai_actions
+    ai_actions=(
+        'setup:Configure AI provider'
+        'chat:Interactive chat'
+        'summarize:Changelog from git log'
+        'explain:Explain last failed command'
+    )
+    local -a memo_actions
+    memo_actions=(
+        'add:Add a memo'
+        'list:Show memos'
+        'clear:Clear memos'
+    )
+    local -a alias_actions
+    alias_actions=(
+        'create:Create an alias'
+        'list:List aliases'
+        'remove:Remove an alias'
+    )
     _arguments -C \
         '--version[Print version]' \
         '--help[Print help]' \
@@ -240,11 +314,17 @@ _proto() {
                 pkg) _describe -t actions 'pkg action' pkg_actions ;;
                 git) _describe -t actions 'git action' git_actions ;;
                 mc)  _describe -t actions 'mc action' mc_actions ;;
-                status) _describe -t actions 'status action' status_actions ;; 
+                status) _describe -t actions 'status action' status_actions ;;
+                encrypt) _describe -t actions 'encrypt action' encrypt_actions ;;
+                app) _describe -t actions 'app action' app_actions ;;
+                ai) _describe -t actions 'ai action' ai_actions ;;
+                memo) _describe -t actions 'memo action' memo_actions ;;
+                alias) _describe -t actions 'alias action' alias_actions ;;
             esac
             case $words[2] in
                 resource_pack) _describe -t actions 'resource_pack' rp_actions ;;
                 server)        _describe -t actions 'server' server_actions ;;
+                pack)          _describe -t actions 'pack' pack_actions ;;
             esac
             ;;
     esac
@@ -258,19 +338,41 @@ write_fish_completion() {
     mkdir -p "$dir"
     cat > "$dir/$BIN_NAME.fish" << 'FISH_EOF'
 complete -c proto -f
-complete -c proto -n "__fish_use_subcommand" -a help -d "Show help"
-complete -c proto -n "__fish_use_subcommand" -a system -d "System information"
+complete -c proto -n "__fish_use_subcommand" -a help -d "Show help for commands"
+complete -c proto -n "__fish_use_subcommand" -a system -d "Display system information"
+complete -c proto -n "__fish_use_subcommand" -a alias -d "Interactive shell alias builder"
+complete -c proto -n "__fish_use_subcommand" -a share-session -d "Share terminal session"
 complete -c proto -n "__fish_use_subcommand" -a pkg -d "Package manager wrapper"
-complete -c proto -n "__fish_use_subcommand" -a git -d "Git enhancements"
+complete -c proto -n "__fish_use_subcommand" -a git -d "Git workflow enhancements"
 complete -c proto -n "__fish_use_subcommand" -a setup -d "Configuration wizard"
 complete -c proto -n "__fish_use_subcommand" -a mc -d "Minecraft utilities"
 complete -c proto -n "__fish_use_subcommand" -a status -d "Network monitoring"
+complete -c proto -n "__fish_use_subcommand" -a discord -d "Discord bot creator"
+complete -c proto -n "__fish_use_subcommand" -a convert -d "Convert units"
+complete -c proto -n "__fish_use_subcommand" -a encrypt -d "Encode/hash/generate crypto"
+complete -c proto -n "__fish_use_subcommand" -a app -d "Project diagnostics & cleanup"
+complete -c proto -n "__fish_use_subcommand" -a ai -d "AI assistant"
+complete -c proto -n "__fish_use_subcommand" -a copy-ctx -d "Bundle repo into clipboard context"
+complete -c proto -n "__fish_use_subcommand" -a memo -d "Location-aware memos"
+complete -c proto -n "__fish_use_subcommand" -a secret -d "Scan for leaked secrets"
+complete -c proto -n "__fish_use_subcommand" -a webhook -d "Listen for webhooks"
+complete -c proto -n "__fish_use_subcommand" -a pr-prep -d "PR readiness check"
+complete -c proto -n "__fish_use_subcommand" -a pr-checkout -d "Check out a PR locally"
+complete -c proto -n "__fish_use_subcommand" -a git-who-broke -d "Bisect to find breaking commit"
+complete -c proto -n "__fish_use_subcommand" -a git-impact -d "Branch risk score"
+complete -c proto -n "__fish_use_subcommand" -a git-catchup -d "Upstream changes since last pull"
 
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a install -d "Install packages"
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a search -d "Search packages"
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a remove -d "Remove packages"
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a update -d "Update packages"
-complete -c proto -n "__fish_seen_subcommand_from pkg" -a list -d "List packages"
+complete -c proto -n "__fish_seen_subcommand_from pkg" -a list -d "List installed packages"
+complete -c proto -n "__fish_seen_subcommand_from pkg" -a build -d "Build pack tools"
+complete -c proto -n "__fish_seen_subcommand_from build" -a pack -d "Portable installer pack"
+complete -c proto -n "__fish_seen_subcommand_from pack" -a create -d "Create pack config"
+complete -c proto -n "__fish_seen_subcommand_from pack" -a edit -d "Edit pack config"
+complete -c proto -n "__fish_seen_subcommand_from pack" -a build -d "Generate installer"
+complete -c proto -n "__fish_seen_subcommand_from pack" -a test -d "Dry-run pack config"
 
 complete -c proto -n "__fish_seen_subcommand_from git" -a log -d "Pretty git log"
 complete -c proto -n "__fish_seen_subcommand_from git" -a stats -d "Repo statistics"
@@ -280,20 +382,58 @@ complete -c proto -n "__fish_seen_subcommand_from git" -a branch -d "Show branch
 
 complete -c proto -n "__fish_seen_subcommand_from mc" -a resource_pack -d "Resource pack utilities"
 complete -c proto -n "__fish_seen_subcommand_from mc" -a server -d "Server management"
-
-complete -c proto -n "__fish_seen_subcommand_from mc server" -a create -d "Create a server"
-complete -c proto -n "__fish_seen_subcommand_from mc server" -a ping -d "Ping a server"
-complete -c proto -n "__fish_seen_subcommand_from mc server" -a status -d "Server status"
-
 complete -c proto -n "__fish_seen_subcommand_from mc resource_pack" -a create -d "Create a resource pack"
 complete -c proto -n "__fish_seen_subcommand_from mc resource_pack" -a fetch -d "Fetch versions"
 complete -c proto -n "__fish_seen_subcommand_from mc resource_pack" -a pack -d "Pack into zip"
 complete -c proto -n "__fish_seen_subcommand_from mc resource_pack" -a add -d "Add an asset"
+complete -c proto -n "__fish_seen_subcommand_from mc server" -a create -d "Create a server"
+complete -c proto -n "__fish_seen_subcommand_from mc server" -a ping -d "Ping a server"
+complete -c proto -n "__fish_seen_subcommand_from mc server" -a status -d "Server status"
 
 complete -c proto -n "__fish_seen_subcommand_from status" -a ping -d "Ping a host"
 complete -c proto -n "__fish_seen_subcommand_from status" -a monitor -d "Live monitor"
 complete -c proto -n "__fish_seen_subcommand_from status" -a serve -d "Web dashboard"
 complete -c proto -n "__fish_seen_subcommand_from status" -a report -d "Generate report"
+
+complete -c proto -n "__fish_seen_subcommand_from discord" -a bot -d "Bot project management"
+complete -c proto -n "__fish_seen_subcommand_from discord" -a quest -d "Quest completion injector"
+complete -c proto -n "__fish_seen_subcommand_from bot" -a create -d "Create a bot project"
+
+complete -c proto -n "__fish_seen_subcommand_from encrypt" -a base64 -d "Base64 encode/decode"
+complete -c proto -n "__fish_seen_subcommand_from encrypt" -a hex -d "Hex encode/decode"
+complete -c proto -n "__fish_seen_subcommand_from encrypt" -a hash -d "Hash text"
+complete -c proto -n "__fish_seen_subcommand_from encrypt" -a uuid -d "Generate UUID v4"
+complete -c proto -n "__fish_seen_subcommand_from encrypt" -a bcrypt -d "Bcrypt hash a password"
+
+complete -c proto -n "__fish_seen_subcommand_from app" -a doctor -d "Audit project health"
+complete -c proto -n "__fish_seen_subcommand_from app" -a port -d "Port management"
+complete -c proto -n "__fish_seen_subcommand_from app" -a nuke -d "Purge build artifacts"
+complete -c proto -n "__fish_seen_subcommand_from app" -a snap -d "Git snapshots"
+complete -c proto -n "__fish_seen_subcommand_from port" -a release -d "Free a port"
+complete -c proto -n "__fish_seen_subcommand_from snap" -a create -d "Create snapshot"
+complete -c proto -n "__fish_seen_subcommand_from snap" -a restore -d "Restore snapshot"
+complete -c proto -n "__fish_seen_subcommand_from snap" -a view -d "View snapshot"
+complete -c proto -n "__fish_seen_subcommand_from snap" -a delete -d "Delete snapshot"
+
+complete -c proto -n "__fish_seen_subcommand_from ai" -a setup -d "Configure AI provider"
+complete -c proto -n "__fish_seen_subcommand_from ai" -a chat -d "Interactive chat"
+complete -c proto -n "__fish_seen_subcommand_from ai" -a summarize -d "Changelog from git log"
+complete -c proto -n "__fish_seen_subcommand_from ai" -a explain -d "Explain last failed command"
+
+complete -c proto -n "__fish_seen_subcommand_from memo" -a add -d "Add a memo"
+complete -c proto -n "__fish_seen_subcommand_from memo" -a list -d "Show memos"
+complete -c proto -n "__fish_seen_subcommand_from memo" -a clear -d "Clear memos"
+
+complete -c proto -n "__fish_seen_subcommand_from alias" -a create -d "Create an alias"
+complete -c proto -n "__fish_seen_subcommand_from alias" -a list -d "List aliases"
+complete -c proto -n "__fish_seen_subcommand_from alias" -a remove -d "Remove an alias"
+
+complete -c proto -n "__fish_seen_subcommand_from share-session" -a create -d "Create a session"
+complete -c proto -n "__fish_seen_subcommand_from share-session" -a join -d "Join a session"
+
+complete -c proto -n "__fish_seen_subcommand_from secret" -a mask -d "Scan and mask secrets"
+
+complete -c proto -n "__fish_seen_subcommand_from webhook" -a listen -d "Listen for webhooks"
 
 complete -c proto -l version -d "Print version"
 complete -c proto -l help -d "Print help"

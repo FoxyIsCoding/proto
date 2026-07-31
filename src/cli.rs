@@ -1,5 +1,5 @@
-use clap::{Parser, Subcommand};
 use crate::commands;
+use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -54,7 +54,10 @@ pub enum Commands {
         #[command(subcommand)]
         action: commands::mc::McAction,
     },
-    #[command(name = "share-session", about = "Share terminal session via tmate/tmux")]
+    #[command(
+        name = "share-session",
+        about = "Share terminal session via tmate/tmux"
+    )]
     ShareSession {
         #[command(subcommand)]
         action: commands::share::ShareAction,
@@ -71,7 +74,11 @@ pub enum Commands {
     },
     #[command(about = "Convert between units (time, length, weight, digital, etc.)")]
     Convert {
-        #[arg(required = true, value_name = "VALUE", help = "Value with unit (e.g. 6m, 10.5km, 500ms, 2GB)")]
+        #[arg(
+            required = true,
+            value_name = "VALUE",
+            help = "Value with unit (e.g. 6m, 10.5km, 500ms, 2GB)"
+        )]
         input: String,
         #[arg(value_name = "TO", help = "Target unit (e.g. cm, min, MB, F)")]
         to: Option<String>,
@@ -91,13 +98,72 @@ pub enum Commands {
         #[command(subcommand)]
         action: commands::ai::AiAction,
     },
-    #[command(name = "copy-ctx", about = "Bundle git repo source files into an LLM-ready clipboard context")]
+    #[command(
+        name = "copy-ctx",
+        about = "Bundle git repo source files into an LLM-ready clipboard context"
+    )]
     CopyCtx,
     #[command(about = "Location-aware scratchpad memos")]
     Memo {
         #[command(subcommand)]
         action: commands::memo::MemoAction,
     },
+    #[command(about = "Scan shell history and logs for leaked secrets")]
+    Secret {
+        #[command(subcommand)]
+        action: commands::secret::SecretAction,
+    },
+    #[command(about = "Print incoming webhooks as formatted JSON")]
+    Webhook {
+        #[command(subcommand)]
+        action: commands::webhook::WebhookAction,
+    },
+    #[command(
+        name = "pr-prep",
+        about = "Run tests, lint, format, and open the PR page"
+    )]
+    PrPrep {
+        #[arg(long, help = "Skip running the test suite")]
+        skip_tests: bool,
+        #[arg(long, help = "Skip running the linter")]
+        skip_lint: bool,
+        #[arg(long, help = "Skip auto-formatting")]
+        skip_fmt: bool,
+        #[arg(long, help = "Don't open the PR page in a browser")]
+        no_open: bool,
+    },
+    #[command(
+        name = "pr-checkout",
+        about = "Check out a GitHub/GitLab pull request locally"
+    )]
+    PrCheckout {
+        #[arg(required = true, value_name = "PR#|URL")]
+        target: String,
+    },
+    #[command(
+        name = "git-who-broke",
+        about = "Bisect to find the commit that broke the tests"
+    )]
+    GitWhoBroke {
+        #[arg(
+            value_name = "TEST_COMMAND",
+            num_args = 0..,
+            allow_hyphen_values = true,
+            trailing_var_arg = true,
+            help = "Test command (default: auto-detected, e.g. cargo test)"
+        )]
+        command: Vec<String>,
+    },
+    #[command(
+        name = "git-impact",
+        about = "Calculate branch risk score before merging"
+    )]
+    GitImpact,
+    #[command(
+        name = "git-catchup",
+        about = "Show what changed upstream since your last pull"
+    )]
+    GitCatchup,
 }
 
 pub fn run(cli: Cli) {
@@ -112,12 +178,10 @@ pub fn run(cli: Cli) {
     }
 
     match cli.command {
-        Some(Commands::Help { command }) => {
-            match command {
-                Some(cmd) => commands::help::run(&commands::help::HelpAction::For { command: cmd }),
-                None => commands::help::run(&commands::help::HelpAction::All),
-            }
-        }
+        Some(Commands::Help { command }) => match command {
+            Some(cmd) => commands::help::run(&commands::help::HelpAction::For { command: cmd }),
+            None => commands::help::run(&commands::help::HelpAction::All),
+        },
         Some(Commands::ShareSession { action }) => commands::share::run(&action),
         Some(Commands::Alias { action }) => commands::alias::run(&action),
         Some(Commands::System) => commands::system::run(),
@@ -127,12 +191,33 @@ pub fn run(cli: Cli) {
         Some(Commands::Mc { action }) => commands::mc::run(&action),
         Some(Commands::Status { action }) => commands::status::run(&action),
         Some(Commands::Discord { action }) => commands::discord::run(&action),
-        Some(Commands::Convert { input, to }) => commands::convert::run(&commands::convert::ConvertAction::Run { input, to }),
+        Some(Commands::Convert { input, to }) => {
+            commands::convert::run(&commands::convert::ConvertAction::Run { input, to })
+        }
         Some(Commands::Encrypt { action }) => commands::encrypt::run(&action),
         Some(Commands::App { action }) => commands::app::run(&action),
         Some(Commands::Ai { action }) => commands::ai::run(&action),
         Some(Commands::CopyCtx) => commands::copyctx::run(),
         Some(Commands::Memo { action }) => commands::memo::run(&action),
+        Some(Commands::Secret { action }) => commands::secret::run(&action),
+        Some(Commands::Webhook { action }) => commands::webhook::run(&action),
+        Some(Commands::PrPrep {
+            skip_tests,
+            skip_lint,
+            skip_fmt,
+            no_open,
+        }) => commands::pr::run(&commands::pr::PrAction::Prep {
+            skip_tests,
+            skip_lint,
+            skip_fmt,
+            no_open,
+        }),
+        Some(Commands::PrCheckout { target }) => {
+            commands::pr::run(&commands::pr::PrAction::Checkout { target })
+        }
+        Some(Commands::GitWhoBroke { command }) => commands::git_extras::who_broke(&command),
+        Some(Commands::GitImpact) => commands::git_extras::impact(),
+        Some(Commands::GitCatchup) => commands::git_extras::catchup(),
         None => {
             commands::help::run(&commands::help::HelpAction::All);
         }
@@ -140,8 +225,8 @@ pub fn run(cli: Cli) {
 }
 
 fn print_version() {
-    use owo_colors::OwoColorize;
     use crate::style;
+    use owo_colors::OwoColorize;
 
     println!("{}", style::proto_banner());
     println!(
@@ -149,7 +234,10 @@ fn print_version() {
         "proto".style(style::Theme::HEADER).bold(),
         env!("CARGO_PKG_VERSION").style(style::Theme::MUTED)
     );
-    println!("{}", "Your friendly protogen CLI companion".style(style::Theme::MUTED));
+    println!(
+        "{}",
+        "Your friendly protogen CLI companion".style(style::Theme::MUTED)
+    );
 }
 
 fn print_short_help() {
