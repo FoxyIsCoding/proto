@@ -27,6 +27,7 @@ pub struct AiConfig {
     pub provider: String,
     pub api_key: String,
     pub model: String,
+    pub endpoint: Option<String>,
     pub personality: String,
     pub custom_prompt: Option<String>,
 }
@@ -37,6 +38,7 @@ impl Default for AiConfig {
             provider: "openai".into(),
             api_key: String::new(),
             model: "gpt-4o-mini".into(),
+            endpoint: None,
             personality: "engineer".into(),
             custom_prompt: None,
         }
@@ -85,23 +87,38 @@ fn setup() {
     println!("{}", style::proto_banner());
     println!("{}\n", "AI Setup".style(style::Theme::HEADER));
 
-    let providers = &["openai", "gemini"];
+    let providers = &["openai", "gemini", "custom  (Ollama, OpenRouter, vLLM, etc.)"];
+    let prov_keys = &["openai", "gemini", "custom"];
+
     let prov_idx = Select::with_theme(&dialoguer::theme::ColorfulTheme::default())
         .with_prompt("AI Provider")
         .items(providers)
         .default(0).interact().unwrap_or(0);
 
-    let provider = providers[prov_idx].to_string();
+    let provider = prov_keys[prov_idx].to_string();
 
     let default_model = match provider.as_str() {
         "openai" => "gpt-4o-mini",
         "gemini" => "gemini-2.0-flash",
+        "custom" => "llama3",
         _ => "gpt-4o-mini",
     };
 
+    let endpoint = if provider == "custom" {
+        let ep: String = Input::with_theme(&dialoguer::theme::ColorfulTheme::default())
+            .with_prompt("API endpoint (OpenAI-compatible)")
+            .default("http://localhost:11434/v1".into())
+            .interact_text().unwrap();
+        Some(ep)
+    } else {
+        None
+    };
+
+    let api_key_hint = if provider == "custom" { "(or 'ollama' / leave blank)" } else { "" };
     let api_key: String = Password::with_theme(&dialoguer::theme::ColorfulTheme::default())
-        .with_prompt("API Key")
-        .interact().unwrap();
+        .with_prompt(&format!("API Key {}", api_key_hint))
+        .allow_empty_password(true)
+        .interact().unwrap_or_default();
 
     let model: String = Input::with_theme(&dialoguer::theme::ColorfulTheme::default())
         .with_prompt("Model")
@@ -134,7 +151,7 @@ fn setup() {
         None
     };
 
-    let config = AiConfig { provider, api_key, model, personality, custom_prompt };
+    let config = AiConfig { provider, api_key, model, endpoint, personality, custom_prompt };
     let toml_str = toml::to_string_pretty(&config).unwrap();
 
     let dir = crate::utils::config_dir();
@@ -288,6 +305,7 @@ fn call_ai(config: &AiConfig, messages: &[(String, String)]) -> Result<String, S
     match config.provider.as_str() {
         "openai" => call_openai(config, messages),
         "gemini" => call_gemini(config, messages),
+        "custom" => call_custom(config, messages),
         _ => Err(format!("Unknown provider: {}", config.provider)),
     }
 }
@@ -359,4 +377,38 @@ fn call_gemini(config: &AiConfig, messages: &[(String, String)]) -> Result<Strin
         .as_str()
         .map(|s| s.to_string())
         .ok_or_else(|| format!("Unexpected response: {}", json))
+}
+
+fn call_custom(config: &AiConfig, messages: &[(String, String)]) -> Result<String, String> {
+    let endpoint = config.endpoint.as_deref().unwrap_or("http://localhost:11434/v1");
+    let base = endpoint.trim_end_matches('/');
+    let url = format!("{}/chat/completions", base);
+
+    let msgs: Vec<serde_json::Value> = messages.iter().map(|(role, content)| {
+        serde_json::json!({"role": role, "content": content})
+    }).collect();
+
+    let mut body = serde_json::json!({
+        "model": config.model,
+        "messages": msgs,
+        "temperature": 0.7,
+        "max_tokens": 2048,
+    });
+
+    let req = ureq::post(&url)
+        .set("Content-Type", "application/json");
+
+    let req = if config.api_key.is_empty() || config.api_key == "ollama" {
+        req
+    } else {
+        req.set("Authorization", &format!("Bearer {}", config.api_key))
+    };
+
+    let resp = req.send_json(body).map_err(|e| format!("Endpoint error: {} (check --endpoint)", e))?;
+    let json: serde_json::Value = resp.into_json().map_err(|e| format!("Parse error: {}", e))?;
+
+    json["choices"][0]["message"]["content"]
+        .as_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| format!("Unexpected response from {}. Expected OpenAI-compatible API.", base))
 }
