@@ -174,6 +174,7 @@ _proto() {
         'git:Git workflow enhancements'
         'setup:Interactive configuration wizard'
         'mc:Minecraft utilities'
+        'status:Network monitoring'
     )
 
     local -a pkg_actions
@@ -215,6 +216,14 @@ _proto() {
         'status:Server status'
     )
 
+    local -a status_actions
+    status_actions=(
+        'ping:Ping a host'
+        'monitor:Live monitor'
+        'serve:Web dashboard'
+        'report:Generate report'
+    )
+
     _arguments -C \
         '--version[Print version]' \
         '--help[Print help]' \
@@ -232,6 +241,9 @@ _proto() {
                     ;;
                 mc)
                     _describe -t actions 'mc action' mc_actions
+                    ;;
+                status)
+                    _describe -t actions 'status action' status_actions
                     ;;
             esac
             case $words[2] in
@@ -259,6 +271,7 @@ complete -c proto -n "__fish_use_subcommand" -a pkg -d "Cross-distro package man
 complete -c proto -n "__fish_use_subcommand" -a git -d "Git workflow enhancements"
 complete -c proto -n "__fish_use_subcommand" -a setup -d "Interactive configuration wizard"
 complete -c proto -n "__fish_use_subcommand" -a mc -d "Minecraft utilities"
+complete -c proto -n "__fish_use_subcommand" -a status -d "Network monitoring"
 
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a install -d "Install packages"
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a search -d "Search packages"
@@ -283,6 +296,11 @@ complete -c proto -n "__fish_seen_subcommand_from mc resource_pack" -a create -d
 complete -c proto -n "__fish_seen_subcommand_from mc resource_pack" -a fetch -d "Fetch versions"
 complete -c proto -n "__fish_seen_subcommand_from mc resource_pack" -a pack -d "Pack into zip"
 complete -c proto -n "__fish_seen_subcommand_from mc resource_pack" -a add -d "Add an asset"
+
+complete -c proto -n "__fish_seen_subcommand_from status" -a ping -d "Ping a host"
+complete -c proto -n "__fish_seen_subcommand_from status" -a monitor -d "Live monitor"
+complete -c proto -n "__fish_seen_subcommand_from status" -a serve -d "Web dashboard"
+complete -c proto -n "__fish_seen_subcommand_from status" -a report -d "Generate report"
 
 complete -c proto -l version -d "Print version"
 complete -c proto -l help -d "Print help"

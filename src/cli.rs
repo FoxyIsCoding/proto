@@ -49,6 +49,11 @@ pub enum Commands {
         #[command(subcommand)]
         action: commands::mc::McAction,
     },
+    #[command(about = "Network status monitoring tools")]
+    Status {
+        #[command(subcommand)]
+        action: commands::status::StatusAction,
+    },
 }
 
 pub fn run(cli: Cli) {
@@ -74,6 +79,7 @@ pub fn run(cli: Cli) {
         Some(Commands::Git { action }) => commands::git::run(&action),
         Some(Commands::Setup) => commands::setup::run(),
         Some(Commands::Mc { action }) => commands::mc::run(&action),
+        Some(Commands::Status { action }) => commands::status::run(&action),
         None => {
             commands::help::run(&commands::help::HelpAction::All);
         }

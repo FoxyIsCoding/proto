@@ -35,6 +35,7 @@ fn print_general_help() {
     print_cmd("git", "<action>", "Git workflow enhancements");
     print_cmd("setup", "", "Interactive configuration wizard");
     print_cmd("mc", "resource_pack|server", "Minecraft resource packs & servers");
+    print_cmd("status", "ping|monitor|serve|report", "Network monitoring tools");
 
     println!("\n{}", "FLAGS:".style(style::Theme::HEADER));
     print_cmd("--version", "", "Print version and exit");
@@ -110,6 +111,19 @@ fn print_command_help(command: &str) {
             println!("  --version VERSION   MC version (default: 1.21.1)");
             println!("  --name NAME         Pack name (default: Resource Pack)");
             println!("  --clean BOOL        Bare bones only (default: true)");
+        }
+        "status" => {
+            println!("{}", "proto status".style(style::Theme::HEADER));
+            println!("  Network monitoring tools.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto status ping <ip[:port]>     Check if a host is reachable");
+            println!("  proto status monitor <ip[:port]>  Live monitoring with uptime stats");
+            println!("  proto status serve <ips...>       Host a dark web dashboard");
+            println!("  proto status report <ip[:port]>   Generate a human-readable report\n");
+            println!("{}", "OPTIONS:".style(style::Theme::HEADER));
+            println!("  -n, --interval SECONDS    Poll interval (default: 5)");
+            println!("  -p, --port PORT           Dashboard port (default: 5050)");
+            println!("  -o, --output FILE         Report output path");
         }
         other => {
             println!("{} Unknown command: '{}'", style::error(""), other.style(style::Theme::ACCENT));

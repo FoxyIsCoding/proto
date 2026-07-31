@@ -136,7 +136,7 @@ _proto_completion() {
 
     case "${prev}" in
         proto)
-            COMPREPLY=( $(compgen -W "help system pkg git setup mc" -- "${cur}") )
+            COMPREPLY=( $(compgen -W "help system pkg git setup mc status" -- "${cur}") )
             return 0 ;;
         pkg)
             COMPREPLY=( $(compgen -W "install search remove update list" -- "${cur}") )
@@ -153,8 +153,11 @@ _proto_completion() {
         server)
             [[ "${word2}" == "mc" ]] && COMPREPLY=( $(compgen -W "create ping status" -- "${cur}") )
             return 0 ;;
+        status)
+            COMPREPLY=( $(compgen -W "ping monitor serve report" -- "${cur}") )
+            return 0 ;;
         help)
-            COMPREPLY=( $(compgen -W "help system pkg git setup mc" -- "${cur}") )
+            COMPREPLY=( $(compgen -W "help system pkg git setup mc status" -- "${cur}") )
             return 0 ;;
     esac
 
@@ -183,6 +186,7 @@ _proto() {
         'git:Git workflow enhancements'
         'setup:Interactive configuration wizard'
         'mc:Minecraft utilities'
+        'status:Network monitoring'
     )
     local -a pkg_actions
     pkg_actions=(
@@ -218,6 +222,13 @@ _proto() {
         'ping:Ping a server'
         'status:Server status'
     )
+    local -a status_actions
+    status_actions=(
+        'ping:Ping a host'
+        'monitor:Live monitor'
+        'serve:Web dashboard'
+        'report:Generate report'
+    )
     _arguments -C \
         '--version[Print version]' \
         '--help[Print help]' \
@@ -229,6 +240,7 @@ _proto() {
                 pkg) _describe -t actions 'pkg action' pkg_actions ;;
                 git) _describe -t actions 'git action' git_actions ;;
                 mc)  _describe -t actions 'mc action' mc_actions ;;
+                status) _describe -t actions 'status action' status_actions ;; 
             esac
             case $words[2] in
                 resource_pack) _describe -t actions 'resource_pack' rp_actions ;;
@@ -252,6 +264,7 @@ complete -c proto -n "__fish_use_subcommand" -a pkg -d "Package manager wrapper"
 complete -c proto -n "__fish_use_subcommand" -a git -d "Git enhancements"
 complete -c proto -n "__fish_use_subcommand" -a setup -d "Configuration wizard"
 complete -c proto -n "__fish_use_subcommand" -a mc -d "Minecraft utilities"
+complete -c proto -n "__fish_use_subcommand" -a status -d "Network monitoring"
 
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a install -d "Install packages"
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a search -d "Search packages"
@@ -276,6 +289,11 @@ complete -c proto -n "__fish_seen_subcommand_from mc resource_pack" -a create -d
 complete -c proto -n "__fish_seen_subcommand_from mc resource_pack" -a fetch -d "Fetch versions"
 complete -c proto -n "__fish_seen_subcommand_from mc resource_pack" -a pack -d "Pack into zip"
 complete -c proto -n "__fish_seen_subcommand_from mc resource_pack" -a add -d "Add an asset"
+
+complete -c proto -n "__fish_seen_subcommand_from status" -a ping -d "Ping a host"
+complete -c proto -n "__fish_seen_subcommand_from status" -a monitor -d "Live monitor"
+complete -c proto -n "__fish_seen_subcommand_from status" -a serve -d "Web dashboard"
+complete -c proto -n "__fish_seen_subcommand_from status" -a report -d "Generate report"
 
 complete -c proto -l version -d "Print version"
 complete -c proto -l help -d "Print help"
