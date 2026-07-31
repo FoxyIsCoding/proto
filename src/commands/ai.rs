@@ -377,7 +377,11 @@ fn call_ai_stream(config: &AiConfig, messages: &[(String, String)], mut on_token
 fn call_openai_compat(config: &AiConfig, messages: &[(String, String)], provider: &str, mut on_token: impl FnMut(&str)) -> Result<String, String> {
     let url = if provider == "custom" {
         let base = config.endpoint.as_deref().unwrap_or("http://localhost:11434/v1").trim_end_matches('/');
-        format!("{}/chat/completions", base)
+        if base.ends_with("/chat/completions") {
+            base.to_string()
+        } else {
+            format!("{}/chat/completions", base)
+        }
     } else {
         "https://api.openai.com/v1/chat/completions".into()
     };
