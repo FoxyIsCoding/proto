@@ -272,8 +272,12 @@ fn explain() {
         return;
     }
 
-    println!("{} {}", "◆".style(style::Theme::ACCENT), "AI Shell Wrapper".style(style::Theme::HEADER));
-    println!("{} Run commands. Errors get auto-explained. /quit to exit.", "  ".dimmed());
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
+    let shell_name = std::path::Path::new(&shell).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "sh".into());
+
+    println!("{} {} {}", "◆".style(style::Theme::ACCENT), "AI Shell Wrapper".style(style::Theme::HEADER), format!("({})", shell_name).style(style::Theme::MUTED));
+    println!("{} Commands run in your {}. Errors get auto-explained.", "  ".dimmed(), shell_name.style(style::Theme::ACCENT));
+    println!("{} /quit to exit, /clear to clear screen.", "  ".dimmed());
     println!("{}", style::divider());
 
     let cwd = std::env::current_dir().unwrap_or_default();
@@ -307,7 +311,7 @@ fn explain() {
             continue;
         }
 
-        let output = std::process::Command::new("sh")
+        let output = std::process::Command::new(&shell)
             .arg("-c").arg(&cmd)
             .current_dir(&cwd)
             .stdout(std::process::Stdio::piped())
