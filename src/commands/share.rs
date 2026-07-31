@@ -242,18 +242,19 @@ fn share_with_vnc() {
         return;
     }
 
-    let port = 5900u16;
-    let sp = style::Spinner::new(&format!("Starting {} on port {}...", server_bin, port));
+    let vnc_port = 5900u16;
+    let web_port = 5800u16;
+    let sp = style::Spinner::new(&format!("Starting {} on port {}...", server_bin, vnc_port));
 
     let mut child = if is_wayland {
         std::process::Command::new("wayvnc")
-            .args(["0.0.0.0", &port.to_string()])
+            .args(["0.0.0.0", &vnc_port.to_string()])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .spawn()
     } else {
         std::process::Command::new("x11vnc")
-            .args(["-forever", "-shared", "-rfbport", &port.to_string(), "-passwd", "proto"])
+            .args(["-forever", "-shared", "-rfbport", &vnc_port.to_string(), "-passwd", "proto"])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .spawn()
@@ -268,90 +269,188 @@ fn share_with_vnc() {
 
     if let Ok(Some(_)) = child.try_wait() {
         sp.fail(&format!("{} exited immediately. Is your display accessible?", server_bin));
-        let _ = child.kill();
         return;
     }
 
     let local_ip = get_local_ip().unwrap_or_else(|| "127.0.0.1".into());
-    let has_ngrok = crate::utils::which("ngrok");
-
+    let pass = "proto";
     sp.done("VNC server running");
 
-    println!();
-    println!("{}", "Desktop Share".style(style::Theme::HEADER));
-    println!("{}", style::divider());
-    println!("{}", style::label_value("VNC Server", &format!("{}:{}", server_bin, port)));
-    println!("{}", style::label_value("Password", "proto"));
-    println!("{}", style::label_value("Display", if is_wayland { "Wayland" } else { "X11" }));
+    let mut public_url = String::new();
+    let mut ngrok_pid: Option<u32> = None;
 
-    if has_ngrok {
-        let sp2 = style::Spinner::new("Creating ngrok tunnel...");
-        let mut tunnel = std::process::Command::new("ngrok")
-            .args(["tcp", &port.to_string(), "--log", "stdout"])
+    if crate::utils::which("ngrok") {
+        let sp2 = style::Spinner::new("Starting ngrok tunnel...");
+        let result = std::process::Command::new("ngrok")
+            .args(["tcp", &vnc_port.to_string(), "--log", "stdout"])
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
             .spawn();
 
-        match tunnel {
-            Ok(ref mut t) => {
+        match result {
+            Ok(mut t) => {
+                ngrok_pid = Some(t.id());
                 use std::io::{BufRead, BufReader};
-                let stdout = t.stdout.take().unwrap();
-                let reader = BufReader::new(stdout);
-                let mut public_url = String::new();
-
+                let reader = BufReader::new(t.stdout.take().unwrap());
                 let start = std::time::Instant::now();
+
                 for line in reader.lines().flatten() {
-                    if let Some(start_marker) = line.find("url=") {
-                        let rest = &line[start_marker + 4..];
-                        if let Some(end) = rest.find(' ') {
-                            public_url = rest[..end].to_string();
-                        } else {
-                            public_url = rest.to_string();
-                        }
-                        break;
+                    if let Some(pos) = line.find("url=") {
+                        let rest = &line[pos + 4..];
+                        public_url = rest.split_whitespace().next().unwrap_or("").to_string();
+                        if !public_url.is_empty() { break; }
                     }
-                    if start.elapsed() > std::time::Duration::from_secs(15) { break; }
+                    if start.elapsed() > std::time::Duration::from_secs(30) { break; }
                 }
 
                 if !public_url.is_empty() {
-                    let clean = public_url.trim_start_matches("tcp://");
+                    public_url = public_url.trim_start_matches("tcp://").to_string();
                     sp2.done("Tunnel ready");
-                    println!("{}", style::label_value("Public", clean));
-                    println!();
-                    println!("{} Viewer connects with any VNC client to: {}", "  ".dimmed(), clean.style(style::Theme::ACCENT).bold());
-                    println!("{} Password: {}", "  ".dimmed(), "proto".style(style::Theme::ACCENT));
-
-                    println!("\n{} Ctrl+C to stop sharing.\n", "  ".dimmed());
-                    println!("{}", style::divider());
-
-                    let _ = child.wait();
-                    let _ = t.kill();
                 } else {
-                    sp2.fail("ngrok tunnel timed out");
+                    sp2.fail("ngrok timed out after 30s");
                     let _ = t.kill();
-                    fallback_local_vnc(&local_ip, port);
-                    let _ = child.wait();
+                    ngrok_pid = None;
                 }
             }
-            Err(_) => {
-                sp2.fail("Failed to start ngrok");
-                fallback_local_vnc(&local_ip, port);
-                let _ = child.wait();
-            }
+            Err(_) => { sp2.fail("Failed to start ngrok"); }
         }
-    } else {
-        println!();
-        println!("{} Install ngrok for public access:", "  ".dimmed());
-        println!("  {}", "sudo pacman -S ngrok  # or download from ngrok.com".style(style::Theme::ACCENT));
-        println!();
-        fallback_local_vnc(&local_ip, port);
-
-        println!("\n{} Ctrl+C to stop sharing.\n", "  ".dimmed());
-        println!("{}", style::divider());
-        let _ = child.wait();
     }
 
-    println!("\n{} VNC server stopped.", style::success(""));
+    let public: Option<String> = if public_url.is_empty() { None } else { Some(public_url.clone()) };
+    let session_info = SessionInfo {
+        vnc_port, web_port,
+        local_ip: local_ip.clone(),
+        public_url: public.clone(),
+        password: pass.into(),
+        display: if is_wayland { "Wayland" } else { "X11" }.into(),
+        has_ngrok: public.is_some(),
+    };
+
+    start_web_ui(&session_info);
+
+    println!();
+    println!("{}", "Desktop Share".style(style::Theme::HEADER));
+    println!("{}", style::divider());
+    println!("{}", style::label_value("VNC", &format!("{}:{}", local_ip, vnc_port)));
+    println!("{}", style::label_value("Web UI", &format!("http://localhost:{}", web_port)));
+    println!("{}", style::label_value("Password", pass));
+
+    if let Some(ref url) = public {
+        println!("{}", style::label_value("Public", url));
+    } else {
+        println!("{}", style::label_value("Public", "none (install ngrok)"));
+    }
+    println!("{}", style::divider());
+
+    println!("\n{} Open {} in your browser.", "  ".dimmed(), format!("http://localhost:{}", web_port).style(style::Theme::ACCENT));
+    if public.is_some() {
+        println!("{} Share the Public URL — any VNC client can connect.", "  ".dimmed());
+    }
+    println!("{} Ctrl+C to stop.\n", "  ".dimmed());
+    println!("{}", style::divider());
+
+    let _ = child.wait();
+
+    if let Some(pid) = ngrok_pid {
+        let _ = std::process::Command::new("kill").arg(pid.to_string()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status();
+    }
+
+    println!("\n{} Session stopped.", style::success(""));
+}
+
+struct SessionInfo {
+    vnc_port: u16,
+    web_port: u16,
+    local_ip: String,
+    public_url: Option<String>,
+    password: String,
+    display: String,
+    has_ngrok: bool,
+}
+
+fn start_web_ui(info: &SessionInfo) {
+    let listener = std::net::TcpListener::bind(format!("127.0.0.1:{}", info.web_port))
+        .expect("Failed to bind web UI port");
+    listener.set_nonblocking(true).ok();
+
+    let local_ip = info.local_ip.clone();
+    let public_url = info.public_url.clone();
+    let password = info.password.clone();
+    let display = info.display.clone();
+    let vnc_port = info.vnc_port;
+    let web_port = info.web_port;
+
+    std::thread::spawn(move || {
+        loop {
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    use std::io::{Read, Write};
+                    let mut buf = [0u8; 4096];
+                    let _ = stream.read(&mut buf);
+
+                    let public_section = if let Some(ref url) = public_url {
+                        format!(r#"<div class="card public">
+                            <div class="label">Public URL</div>
+                            <div class="value highlight">{}</div>
+                            <div class="note">Share this — any VNC client can connect</div>
+                        </div>"#, url)
+                    } else {
+                        r#"<div class="card missing">
+                            <div class="label">Public Access</div>
+                            <div class="value">Not available</div>
+                            <div class="note">Install ngrok: <code>sudo pacman -S ngrok</code></div>
+                        </div>"#.to_string()
+                    };
+
+                    let html = format!(r##"<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="8">
+<title>Proto Desktop Share</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:#0d1117;color:#c9d1d9;font-family:system-ui,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:40px 20px}}
+h1{{color:#58a6ff;font-size:22px;margin-bottom:8px}}
+.subtitle{{color:#8b949e;font-size:14px;margin-bottom:32px}}
+.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;width:100%;max-width:720px}}
+.card{{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px}}
+.card.public{{border-color:#3fb950;background:#0d2b15}}
+.card.missing{{border-color:#30363d;opacity:.6}}
+.label{{font-size:12px;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}}
+.value{{font-size:20px;font-weight:600;word-break:break-all}}
+.value.highlight{{color:#3fb950}}
+.note{{font-size:12px;color:#484f58;margin-top:8px}}
+.note code{{background:#21262d;padding:2px 6px;border-radius:3px;font-size:11px}}
+.footer{{margin-top:32px;color:#484f58;font-size:12px;text-align:center}}
+.status{{display:inline-block;width:8px;height:8px;background:#3fb950;border-radius:50%;margin-right:8px;box-shadow:0 0 8px #3fb95066;animation:pulse 2s infinite}}
+@keyframes pulse{{0%,100%{{opacity:1}} 50%{{opacity:.5}}}}
+</style></head>
+<body>
+<h1><span class="status"></span>Proto Desktop Share</h1>
+<div class="subtitle">{} display — {} VNC server</div>
+<div class="grid">
+    <div class="card"><div class="label">VNC Address</div><div class="value">{}:{}</div><div class="note">Password: <code>{}</code></div></div>
+    <div class="card"><div class="label">Web UI</div><div class="value">http://localhost:{}</div><div class="note">This page — auto-refreshes</div></div>
+    {}
+</div>
+<div class="footer">Proto CLI · Viewer needs a VNC client (TigerVNC, RealVNC, Remmina)</div>
+</body></html>"##,
+                        display, display, local_ip, vnc_port, password,
+                        web_port, public_section
+                    );
+
+                    let resp = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        html.len(), html
+                    );
+                    let _ = stream.write_all(resp.as_bytes());
+                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                Err(_) => break,
+            }
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+    });
 }
 
 fn fallback_local_vnc(ip: &str, port: u16) {
