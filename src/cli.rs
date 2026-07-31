@@ -59,6 +59,18 @@ pub enum Commands {
         #[command(subcommand)]
         action: commands::discord::DiscordAction,
     },
+    #[command(about = "Convert between units (time, length, weight, digital, etc.)")]
+    Convert {
+        #[arg(required = true, value_name = "VALUE", help = "Value with unit (e.g. 6m, 10.5km, 500ms, 2GB)")]
+        input: String,
+        #[arg(value_name = "TO", help = "Target unit (e.g. cm, min, MB, F)")]
+        to: Option<String>,
+    },
+    #[command(about = "Encode, decode, hash, and generate cryptographic values")]
+    Encrypt {
+        #[command(subcommand)]
+        action: commands::encrypt::EncryptAction,
+    },
 }
 
 pub fn run(cli: Cli) {
@@ -86,6 +98,8 @@ pub fn run(cli: Cli) {
         Some(Commands::Mc { action }) => commands::mc::run(&action),
         Some(Commands::Status { action }) => commands::status::run(&action),
         Some(Commands::Discord { action }) => commands::discord::run(&action),
+        Some(Commands::Convert { input, to }) => commands::convert::run(&commands::convert::ConvertAction::Run { input, to }),
+        Some(Commands::Encrypt { action }) => commands::encrypt::run(&action),
         None => {
             commands::help::run(&commands::help::HelpAction::All);
         }

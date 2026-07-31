@@ -20,3 +20,9 @@ ureq = { version = "2", features = ["json"] }
 zip = "1"
 flate2 = "1"
 crc32fast = "1"
+base64 = "0.22"
+sha2 = "0.10"
+sha1 = "0.10"
+md-5 = "0.10"
+uuid = { version = "1", features = ["v4"] }
+bcrypt = "0.15"
