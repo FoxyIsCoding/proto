@@ -6,7 +6,7 @@ use crate::style;
 pub enum ShareAction {
     #[command(about = "Create a shareable terminal session")]
     Create {
-        #[arg(long, value_name = "BACKEND", help = "Force backend: sshx, tmate, tmux")]
+        #[arg(long, value_name = "BACKEND", help = "Force backend: sshx, tmate, tmux, vnc")]
         backend: Option<String>,
     },
     #[command(about = "Join an existing shared session")]
@@ -33,6 +33,7 @@ fn create(force_backend: Option<&str>) {
         "sshx" => share_with_sshx(),
         "tmate" => share_with_tmate(true),
         "tmux" => share_with_tmux(),
+        "vnc" => share_with_vnc(),
         _ => {
             if crate::utils::which("sshx") {
                 share_with_sshx();
@@ -47,6 +48,8 @@ fn create(force_backend: Option<&str>) {
                 println!("    {}", "cargo install sshx".dimmed());
                 println!("  {} {}", "▸".style(style::Theme::ACCENT), "tmate — SSH + web link, needs tmate.io relay");
                 println!("    {}", "sudo pacman -S tmate  /  sudo apt install tmate".dimmed());
+                println!("  {} {}", "▸".style(style::Theme::ACCENT), "vnc   — full desktop (entire screen), VNC + ngrok tunnel");
+                println!("    {}", "sudo pacman -S x11vnc wayvnc ngrok".dimmed());
                 println!("  {} {}", "▸".style(style::Theme::ACCENT), "tmux  — local only, teammate must SSH in");
                 println!("    {}", "sudo pacman -S tmux  /  sudo apt install tmux".dimmed());
                 println!("\n{} {}", "Or force a backend:", "proto share-session create --backend tmux".dimmed());
@@ -223,6 +226,148 @@ fn share_with_tmux() {
             }
         }
     }
+}
+
+fn share_with_vnc() {
+    let is_wayland = std::env::var("WAYLAND_DISPLAY").is_ok() || std::env::var("XDG_SESSION_TYPE").map(|s| s == "wayland").unwrap_or(false);
+
+    let (server_bin, install_hint) = if is_wayland {
+        ("wayvnc", "sudo pacman -S wayvnc")
+    } else {
+        ("x11vnc", "sudo pacman -S x11vnc")
+    };
+
+    if !crate::utils::which(server_bin) {
+        eprintln!("{} {} not installed. Install: {}", style::error(""), server_bin, install_hint.style(style::Theme::ACCENT));
+        return;
+    }
+
+    let port = 5900u16;
+    let sp = style::Spinner::new(&format!("Starting {} on port {}...", server_bin, port));
+
+    let mut child = if is_wayland {
+        std::process::Command::new("wayvnc")
+            .args(["0.0.0.0", &port.to_string()])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+    } else {
+        std::process::Command::new("x11vnc")
+            .args(["-forever", "-shared", "-rfbport", &port.to_string(), "-passwd", "proto"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+    };
+
+    let mut child = match child {
+        Ok(c) => c,
+        Err(e) => { sp.fail(&format!("Failed: {}", e)); return; }
+    };
+
+    std::thread::sleep(std::time::Duration::from_secs(1));
+
+    if let Ok(Some(_)) = child.try_wait() {
+        sp.fail(&format!("{} exited immediately. Is your display accessible?", server_bin));
+        let _ = child.kill();
+        return;
+    }
+
+    let local_ip = get_local_ip().unwrap_or_else(|| "127.0.0.1".into());
+    let has_ngrok = crate::utils::which("ngrok");
+
+    sp.done("VNC server running");
+
+    println!();
+    println!("{}", "Desktop Share".style(style::Theme::HEADER));
+    println!("{}", style::divider());
+    println!("{}", style::label_value("VNC Server", &format!("{}:{}", server_bin, port)));
+    println!("{}", style::label_value("Password", "proto"));
+    println!("{}", style::label_value("Display", if is_wayland { "Wayland" } else { "X11" }));
+
+    if has_ngrok {
+        let sp2 = style::Spinner::new("Creating ngrok tunnel...");
+        let mut tunnel = std::process::Command::new("ngrok")
+            .args(["tcp", &port.to_string(), "--log", "stdout"])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+
+        match tunnel {
+            Ok(ref mut t) => {
+                use std::io::{BufRead, BufReader};
+                let stdout = t.stdout.take().unwrap();
+                let reader = BufReader::new(stdout);
+                let mut public_url = String::new();
+
+                let start = std::time::Instant::now();
+                for line in reader.lines().flatten() {
+                    if let Some(start_marker) = line.find("url=") {
+                        let rest = &line[start_marker + 4..];
+                        if let Some(end) = rest.find(' ') {
+                            public_url = rest[..end].to_string();
+                        } else {
+                            public_url = rest.to_string();
+                        }
+                        break;
+                    }
+                    if start.elapsed() > std::time::Duration::from_secs(15) { break; }
+                }
+
+                if !public_url.is_empty() {
+                    let clean = public_url.trim_start_matches("tcp://");
+                    sp2.done("Tunnel ready");
+                    println!("{}", style::label_value("Public", clean));
+                    println!();
+                    println!("{} Viewer connects with any VNC client to: {}", "  ".dimmed(), clean.style(style::Theme::ACCENT).bold());
+                    println!("{} Password: {}", "  ".dimmed(), "proto".style(style::Theme::ACCENT));
+
+                    println!("\n{} Ctrl+C to stop sharing.\n", "  ".dimmed());
+                    println!("{}", style::divider());
+
+                    let _ = child.wait();
+                    let _ = t.kill();
+                } else {
+                    sp2.fail("ngrok tunnel timed out");
+                    let _ = t.kill();
+                    fallback_local_vnc(&local_ip, port);
+                    let _ = child.wait();
+                }
+            }
+            Err(_) => {
+                sp2.fail("Failed to start ngrok");
+                fallback_local_vnc(&local_ip, port);
+                let _ = child.wait();
+            }
+        }
+    } else {
+        println!();
+        println!("{} Install ngrok for public access:", "  ".dimmed());
+        println!("  {}", "sudo pacman -S ngrok  # or download from ngrok.com".style(style::Theme::ACCENT));
+        println!();
+        fallback_local_vnc(&local_ip, port);
+
+        println!("\n{} Ctrl+C to stop sharing.\n", "  ".dimmed());
+        println!("{}", style::divider());
+        let _ = child.wait();
+    }
+
+    println!("\n{} VNC server stopped.", style::success(""));
+}
+
+fn fallback_local_vnc(ip: &str, port: u16) {
+    println!("{}", "Local Network Access".style(style::Theme::HEADER));
+    println!("{}", style::divider());
+    println!("{}", style::label_value("Connect to", &format!("{}:{}", ip, port)));
+    println!("{}", style::label_value("Password", "proto"));
+    println!("{}", style::divider());
+    println!("\n  {} Any VNC client can connect: {}", "▸".style(style::Theme::ACCENT), "TigerVNC, RealVNC, Remmina".dimmed());
+    println!("  {} From terminal: {}", "▸".style(style::Theme::ACCENT), format!("vncviewer {}:{}", ip, port).dimmed());
+}
+
+fn get_local_ip() -> Option<String> {
+    crate::utils::run_command_output("hostname", &["-I"])
+        .ok()
+        .and_then(|s| s.split_whitespace().next().map(|s| s.to_string()))
 }
 
 fn join(link: &str) {
