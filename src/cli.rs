@@ -71,6 +71,11 @@ pub enum Commands {
         #[command(subcommand)]
         action: commands::encrypt::EncryptAction,
     },
+    #[command(about = "Project diagnostics, port management, cleanup, and snapshots")]
+    App {
+        #[command(subcommand)]
+        action: commands::app::AppAction,
+    },
 }
 
 pub fn run(cli: Cli) {
@@ -100,6 +105,7 @@ pub fn run(cli: Cli) {
         Some(Commands::Discord { action }) => commands::discord::run(&action),
         Some(Commands::Convert { input, to }) => commands::convert::run(&commands::convert::ConvertAction::Run { input, to }),
         Some(Commands::Encrypt { action }) => commands::encrypt::run(&action),
+        Some(Commands::App { action }) => commands::app::run(&action),
         None => {
             commands::help::run(&commands::help::HelpAction::All);
         }

@@ -8,5 +8,6 @@ pub mod mc_server;
 pub mod status;
 pub mod convert;
 pub mod encrypt;
+pub mod app;
 pub mod discord;
 pub mod template;

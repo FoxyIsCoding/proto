@@ -37,6 +37,7 @@ fn print_general_help() {
     print_cmd("mc", "resource_pack|server", "Minecraft resource packs & servers");
     print_cmd("status", "ping|monitor|serve|report", "Network monitoring tools");
     print_cmd("discord", "bot|quest", "Discord bot creator & tools");
+    print_cmd("app", "doctor|port|nuke|snap", "Project diagnostics & cleanup");
 
     println!("\n{}", "FLAGS:".style(style::Theme::HEADER));
     print_cmd("--version", "", "Print version and exit");
@@ -136,6 +137,19 @@ fn print_command_help(command: &str) {
             println!("  --language    python|rust|javascript|typescript|csharp|cpp");
             println!("  --template    slash_command|prefix|repeater|counter|none");
             println!("\n{} Templates include full runnable code, env config, and deps.", "  ".dimmed());
+        }
+        "app" => {
+            println!("{}", "proto app".style(style::Theme::HEADER));
+            println!("  Project diagnostics and cleanup tools.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto app doctor              Audit deps, .env, and ports");
+            println!("  proto app port release <PORT>  Find and kill port usage");
+            println!("  proto app nuke [--skip]        Purge build artifacts");
+            println!("  proto app snap <NAME> create   Snapshot git state");
+            println!("  proto app snap <NAME> view     Inspect a snapshot");
+            println!("  proto app snap <NAME> restore  Restore a snapshot");
+            println!("  proto app snap <NAME> delete   Delete a snapshot");
+            println!("  proto app snap                 List all snapshots");
         }
         other => {
             println!("{} Unknown command: '{}'", style::error(""), other.style(style::Theme::ACCENT));
