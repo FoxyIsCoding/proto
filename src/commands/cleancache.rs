@@ -2,7 +2,7 @@ use crate::panel::{PanelPayload, PanelRow};
 use crate::style;
 use owo_colors::OwoColorize;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 struct CacheTarget {
     label: &'static str,
@@ -53,19 +53,37 @@ fn cache_targets() -> Vec<CacheTarget> {
             cmd: None,
         },
         CacheTarget {
-            label: "cargo registry",
+            label: "cargo registry cache",
             path: Some(home.join(".cargo/registry/cache")),
             needs_sudo: false,
             cmd: None,
         },
         CacheTarget {
-            label: "yay cache",
+            label: "cargo registry src",
+            path: Some(home.join(".cargo/registry/src")),
+            needs_sudo: false,
+            cmd: None,
+        },
+        CacheTarget {
+            label: "go build cache",
+            path: Some(home.join(".cache/go-build")),
+            needs_sudo: false,
+            cmd: None,
+        },
+        CacheTarget {
+            label: "gradle cache",
+            path: Some(home.join(".gradle/caches")),
+            needs_sudo: false,
+            cmd: None,
+        },
+        CacheTarget {
+            label: "yay cache (AUR build)",
             path: Some(home.join(".cache/yay")),
             needs_sudo: false,
             cmd: None,
         },
         CacheTarget {
-            label: "paru cache",
+            label: "paru cache (AUR build)",
             path: Some(home.join(".cache/paru")),
             needs_sudo: false,
             cmd: None,
@@ -103,13 +121,15 @@ fn dir_size(path: &Path) -> u64 {
     }
     let out = Command::new("du")
         .args(["-sb", path.to_str().unwrap_or("")])
+        .stderr(Stdio::null())
         .output();
     match out {
-        Ok(o) if o.status.success() => {
+        // du may exit non-zero on permission errors but still prints the total.
+        Ok(o) => {
             let text = String::from_utf8_lossy(&o.stdout);
             text.split_whitespace().next().and_then(|s| s.parse().ok()).unwrap_or(0)
         }
-        _ => 0,
+        Err(_) => 0,
     }
 }
 

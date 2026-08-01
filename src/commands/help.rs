@@ -141,7 +141,7 @@ fn print_general_help() {
     print_cmd(
         "clean-cache",
         "[--serve]",
-        "Scan & clean npm/pip/cargo/docker caches",
+        "Scan & clean package, build & docker caches",
     );
 
     println!("\n{}", "FLAGS:".style(style::Theme::HEADER));
@@ -562,7 +562,8 @@ fn print_command_help(command: &str) {
             println!("  proto clean-cache                   Interactive scan & clean");
             println!("  proto clean-cache --serve           Send scan to the panel\n");
             println!("{}", "SCANS:".style(style::Theme::HEADER));
-            println!("  npm, pip, uv, bun, yarn, cargo, yay, paru, pacman (sudo),");
+            println!("  npm, pip, uv, bun, yarn, cargo registry, cargo src, go build,");
+            println!("  gradle, yay (AUR build), paru (AUR build), pacman (sudo),");
             println!("  apt (sudo), dnf (sudo), and docker builder cache.\n");
             println!("{}", "SHOWS:".style(style::Theme::HEADER));
             println!("  Disk free before and after cleaning + bytes recovered.");
