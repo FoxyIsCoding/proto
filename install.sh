@@ -134,7 +134,7 @@ _proto_completion() {
     word2="${COMP_WORDS[2]}"
     word3="${COMP_WORDS[3]}"
 
-    local commands="help system alias share-session pkg git setup mc status discord convert encrypt app ai copy-ctx memo secret webhook pr-prep pr-checkout git-who-broke git-impact git-catchup share dedupe media cert-check dns-lookup local-s3 port-forward download battery kill-heavy ports tree-view docker clean-cache"
+    local commands="help system alias share-session pkg git setup mc status discord convert encrypt app ai copy-ctx memo secret webhook pr-prep pr-checkout git-who-broke git-impact git-catchup share dedupe media cert-check dns-lookup local-s3 port-forward download battery kill-heavy ports tree-view docker clean-cache audit-deps"
     local pkg_actions="install search remove update list build"
     local pack_actions="create edit build test"
     local git_actions="log stats save undo branch"
@@ -239,6 +239,7 @@ _proto() {
         'tree-view:ASCII folder tree that respects .gitignore'
         'docker:Docker container manager & safe pruning'
         'clean-cache:Scan & clean build and package caches'
+        'audit-deps:Scan for dependency vulnerabilities'
     )
     local -a pkg_actions
     pkg_actions=(
@@ -412,6 +413,7 @@ complete -c proto -n "__fish_use_subcommand" -a ports -d "Interactive listening-
 complete -c proto -n "__fish_use_subcommand" -a tree-view -d "ASCII folder tree that respects .gitignore"
 complete -c proto -n "__fish_use_subcommand" -a docker -d "Docker container manager & safe pruning"
 complete -c proto -n "__fish_use_subcommand" -a clean-cache -d "Scan & clean build and package caches"
+complete -c proto -n "__fish_use_subcommand" -a audit-deps -d "Scan for dependency vulnerabilities"
 
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a install -d "Install packages"
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a search -d "Search packages"

@@ -1,5 +1,6 @@
 pub mod ai;
 pub mod alias;
+pub mod auditdeps;
 pub mod app;
 pub mod battery;
 pub mod cert;

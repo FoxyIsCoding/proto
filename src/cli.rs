@@ -251,6 +251,18 @@ pub enum Commands {
         port: u16,
     },
     #[command(
+        name = "audit-deps",
+        about = "Scan lockfiles & system packages for known vulnerabilities"
+    )]
+    AuditDeps {
+        #[arg(
+            value_name = "DIR",
+            default_value = ".",
+            help = "Directory to scan (default: current directory)"
+        )]
+        dir: String,
+    },
+    #[command(
         name = "cert-check",
         about = "Inspect the TLS certificate of a remote server"
     )]
@@ -367,6 +379,7 @@ pub fn run(cli: Cli) {
         Some(Commands::CleanCache { serve, port }) => {
             commands::cleancache::run(serve, port)
         }
+        Some(Commands::AuditDeps { dir }) => commands::auditdeps::run(&dir),
         Some(Commands::CertCheck { domain }) => commands::cert::run(&domain),
         Some(Commands::DnsLookup { domain }) => commands::dns::run(&domain),
         Some(Commands::LocalS3) => commands::locals3::run(),

@@ -143,6 +143,11 @@ fn print_general_help() {
         "[--serve]",
         "Scan & clean package, build & docker caches",
     );
+    print_cmd(
+        "audit-deps",
+        "[DIR]",
+        "Scan lockfiles & system packages for known vulnerabilities",
+    );
 
     println!("\n{}", "FLAGS:".style(style::Theme::HEADER));
     print_cmd("--version", "", "Print version and exit");
@@ -568,6 +573,25 @@ fn print_command_help(command: &str) {
             println!("{}", "SHOWS:".style(style::Theme::HEADER));
             println!("  Disk free before and after cleaning + bytes recovered.");
             println!("  Always asks for confirmation before deleting anything.");
+        }
+        "audit-deps" => {
+            println!("{}", "proto audit-deps".style(style::Theme::HEADER));
+            println!("  Scan lockfiles & system packages for known vulnerabilities.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto audit-deps                     Scan current directory");
+            println!("  proto audit-deps /path/to/project    Scan another directory\n");
+            println!("{}", "LOCKFILES:".style(style::Theme::HEADER));
+            println!("  package-lock.json, yarn.lock (npm), Cargo.lock (crates.io),");
+            println!("  go.sum (Go), requirements.txt, Pipfile.lock, poetry.lock");
+            println!("  (PyPI), Gemfile.lock (RubyGems), composer.lock (Packagist).\n");
+            println!("{}", "SYSTEM:".style(style::Theme::HEADER));
+            println!("  On Arch: compares every installed pacman/AUR package against");
+            println!("  the Arch Security Tracker (ASA/AVG advisories).\n");
+            println!("{}", "DATA:".style(style::Theme::HEADER));
+            println!("  Lockfile versions are checked against Google's OSV API;");
+            println!("  severity + fix versions are pulled per advisory. Requires a");
+            println!("  network connection. Scans up to 6 directories deep and skips");
+            println!("  node_modules, target/, .git, vendor, dist, and build.");
         }
         other => {
             println!(
