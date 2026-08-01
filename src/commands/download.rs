@@ -33,7 +33,7 @@ pub enum DownloadAction {
         url: Option<String>,
         #[arg(long, value_name = "DIR", default_value = "downloads/music", help = "Output directory")]
         dir: String,
-        #[arg(long, value_name = "BROWSER", help = "Browser to pull cookies from (default: opera)")]
+        #[arg(long, value_name = "BROWSER", help = "Browser to pull cookies from (default: auto-detect)")]
         browser: Option<String>,
         #[arg(long, value_name = "N", help = "Limit how many new tracks to download")]
         amount: Option<usize>,
@@ -442,7 +442,17 @@ fn soundcloud(
         }
     }
 
-    let browser = browser.unwrap_or("opera").to_string();
+    let browser = resolve_browser(browser);
+    println!(
+        "  {}",
+        style::label_value(
+            "Cookies",
+            match &browser {
+                Some(b) => b.as_str(),
+                None => "none (public content)",
+            }
+        )
+    );
 
     let mut previous = std::collections::HashSet::new();
     read_download_log(&dir_path.join(SOUNDCLOUD_LOG), &mut previous);
@@ -452,10 +462,13 @@ fn soundcloud(
     );
 
     let sp = style::Spinner::new("Fetching playlist entries...");
-    let json = match fetch_entries(url, &browser) {
-        Some(j) => j,
-        None => {
-            sp.fail("Could not read the playlist. Is the URL private or the browser cookie missing?");
+    let json = match fetch_entries(url, browser.as_deref()) {
+        Ok(j) => j,
+        Err(reason) => {
+            sp.fail(&format!(
+                "Could not read the playlist: {}. Is it private or are cookies missing?",
+                reason
+            ));
             return;
         }
     };
@@ -554,8 +567,10 @@ fn soundcloud(
     let mut args: Vec<String> = Vec::new();
     args.push("--batch-file".into());
     args.push(batch.to_string_lossy().to_string());
-    args.push("--cookies-from-browser".into());
-    args.push(browser.clone());
+    if let Some(b) = &browser {
+        args.push("--cookies-from-browser".into());
+        args.push(b.clone());
+    }
     args.push("-f".into());
     args.push("bestaudio".into());
     args.push("-x".into());
@@ -634,22 +649,62 @@ fn read_download_log(path: &Path, out: &mut std::collections::HashSet<String>) {
     }
 }
 
-fn fetch_entries(url: &str, browser: &str) -> Option<serde_json::Value> {
-    let out = Command::new("yt-dlp")
-        .args([
-            "--flat-playlist",
-            "--dump-single-json",
-            "--cookies-from-browser",
-            browser,
-            "--no-warnings",
-        ])
+fn fetch_entries(url: &str, browser: Option<&str>) -> Result<serde_json::Value, String> {
+    if let Ok(v) = run_fetch(url, None) {
+        return Ok(v);
+    }
+    if let Some(b) = browser {
+        return run_fetch(url, Some(b));
+    }
+    Err("public fetch failed and no browser found".to_string())
+}
+
+fn run_fetch(url: &str, browser: Option<&str>) -> Result<serde_json::Value, String> {
+    let mut cmd = Command::new("yt-dlp");
+    cmd.args(["--flat-playlist", "--dump-single-json", "--no-warnings"]);
+    if let Some(b) = browser {
+        cmd.args(["--cookies-from-browser", b]);
+    }
+    let out = cmd
         .arg(url)
         .output()
-        .ok()?;
+        .map_err(|e| e.to_string())?;
     if !out.status.success() {
-        return None;
+        let err = String::from_utf8_lossy(&out.stderr);
+        let tail = err.lines().last().unwrap_or("").trim().to_string();
+        return Err(if tail.is_empty() { "yt-dlp exited with an error".into() } else { tail });
     }
-    serde_json::from_slice(&out.stdout).ok()
+    serde_json::from_slice(&out.stdout).map_err(|e| e.to_string())
+}
+
+fn resolve_browser(explicit: Option<&str>) -> Option<String> {
+    let mappings: &[(&str, &str)] = &[
+        ("google-chrome", "chrome"),
+        ("google-chrome-stable", "chrome"),
+        ("chromium", "chromium"),
+        ("chromium-browser", "chromium"),
+        ("brave-browser", "brave"),
+        ("microsoft-edge", "edge"),
+        ("edge", "edge"),
+        ("vivaldi", "vivaldi"),
+        ("opera", "opera"),
+        ("firefox", "firefox"),
+    ];
+    if let Some(b) = explicit {
+        let b = b.trim().to_lowercase();
+        for (bin, name) in mappings {
+            if *bin == b {
+                return Some(name.to_string());
+            }
+        }
+        return Some(b);
+    }
+    for (bin, name) in mappings {
+        if crate::utils::which(bin) {
+            return Some(name.to_string());
+        }
+    }
+    None
 }
 
 fn parse_entries(json: &serde_json::Value) -> Vec<&serde_json::Value> {

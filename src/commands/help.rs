@@ -456,7 +456,8 @@ fn print_command_help(command: &str) {
             println!("  Tracks go to <dir>/<uploader>/<title>.mp3 (256k + metadata/cover).");
             println!("  download_log.txt tracks already-downloaded songs; failures are");
             println!("  written to download_log_ERROR.txt. Runs >15 min are skipped.");
-            println!("  Cookies come from the browser (default: opera).\n");
+            println!("  Cookies come from an installed browser (auto-detected,");
+            println!("  override with --browser chrome|firefox|etc).\n");
             println!("  proto download music https://soundcloud.com/artist --artist");
             println!("      Downloads an artist's whole catalog (profile page).\n");
             println!("{}", "YOUTUBE:".style(style::Theme::HEADER));
