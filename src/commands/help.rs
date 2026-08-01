@@ -578,8 +578,14 @@ fn print_command_help(command: &str) {
             println!("{}", "proto audit-deps".style(style::Theme::HEADER));
             println!("  Scan lockfiles & system packages for known vulnerabilities.\n");
             println!("{}", "USAGE:".style(style::Theme::HEADER));
-            println!("  proto audit-deps                     Scan current directory");
-            println!("  proto audit-deps /path/to/project    Scan another directory\n");
+            println!("  proto audit-deps                     Interactive (prompts for dir/sources)");
+            println!("  proto audit-deps /path/to/project    Scan another directory");
+            println!("  proto audit-deps --no-prompt         Audit everything non-interactively");
+            println!("  proto audit-deps --min-severity high Only report High+ findings\n");
+            println!("{}", "FLAGS:".style(style::Theme::HEADER));
+            println!("  --no-prompt         Skip prompts (dir default ., all sources, all severities)");
+            println!("  --no-open           Never ask to open advisories in the browser");
+            println!("  --min-severity LVL  Filter: all, low, moderate, high, critical\n");
             println!("{}", "LOCKFILES:".style(style::Theme::HEADER));
             println!("  package-lock.json, yarn.lock (npm), Cargo.lock (crates.io),");
             println!("  go.sum (Go), requirements.txt, Pipfile.lock, poetry.lock");
@@ -589,9 +595,11 @@ fn print_command_help(command: &str) {
             println!("  the Arch Security Tracker (ASA/AVG advisories).\n");
             println!("{}", "DATA:".style(style::Theme::HEADER));
             println!("  Lockfile versions are checked against Google's OSV API;");
-            println!("  severity + fix versions are pulled per advisory. Requires a");
-            println!("  network connection. Scans up to 6 directories deep and skips");
-            println!("  node_modules, target/, .git, vendor, dist, and build.");
+            println!("  severity + fix versions are pulled per advisory. A data-freshness");
+            println!("  summary shows when each OSV database and the Arch Security Tracker");
+            println!("  were last updated. Interactive mode can open advisory pages in the");
+            println!("  browser. Requires a network connection. Scans up to 6 directories");
+            println!("  deep and skips node_modules, target/, .git, vendor, dist, build.");
         }
         other => {
             println!(

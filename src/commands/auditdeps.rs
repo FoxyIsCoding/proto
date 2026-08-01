@@ -25,6 +25,7 @@ struct Vuln {
     severity: Option<String>,
     summary: Option<String>,
     fixed: Option<String>,
+    url: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -40,63 +41,154 @@ struct Checked {
     packages: usize,
 }
 
-pub fn run(dir: &str) {
+enum Source {
+    Lockfile(PathBuf),
+    System,
+}
+
+pub fn run(dir: Option<String>, no_prompt: bool, no_open: bool, min_severity: Option<String>) {
     println!("{}", style::header("Dependency Audit"));
     println!("{}", style::divider());
+
+    let dir = match dir {
+        Some(d) => d,
+        None => {
+            let input = dialoguer::Input::with_theme(&dialoguer::theme::ColorfulTheme::default())
+                .with_prompt("Directory to scan")
+                .default(".".to_string())
+                .allow_empty(false)
+                .interact_text()
+                .unwrap_or_else(|_| ".".to_string());
+            input
+        }
+    };
     println!("  {} Scanning {} — lockfiles & system packages\n", style::muted(""), dir);
 
     let agent = new_agent();
-    let mut findings: Vec<Finding> = Vec::new();
-    let mut checked: Vec<Checked> = Vec::new();
-
-    let dir_path = PathBuf::from(dir);
+    let dir_path = PathBuf::from(&dir);
     let files = find_lockfiles(&dir_path);
-    if files.is_empty() {
+
+    let system_avail = crate::utils::which("pacman");
+    let mut sources: Vec<(String, Source)> = Vec::new();
+    for f in &files {
+        if let Some(ec) = ecosystem_for(f) {
+            let list = parse_lockfile(f);
+            if !list.is_empty() {
+                sources.push((
+                    format!("{} ({}, {} pkgs)", rel_label(&dir_path, f), ec, list.len()),
+                    Source::Lockfile(f.clone()),
+                ));
+            }
+        }
+    }
+    if system_avail {
+        sources.push((
+            "system (pacman + AUR)".to_string(),
+            Source::System,
+        ));
+    }
+
+    if sources.is_empty() {
         println!(
-            "  {} No supported lockfiles found in '{}'.",
+            "  {} No supported lockfiles found in '{}' and no pacman.",
             style::muted(""),
             dir
         );
+        return;
     }
 
-    let mut queries: Vec<PackageQuery> = Vec::new();
-    for f in &files {
-        let Some(ec) = ecosystem_for(f) else { continue };
-        let list = parse_lockfile(f);
-        if list.is_empty() {
-            continue;
+    let selected: Vec<usize> = if no_prompt {
+        (0..sources.len()).collect()
+    } else {
+        let opts: Vec<String> = sources.iter().map(|(l, _)| l.clone()).collect();
+        let defaults: Vec<bool> = vec![true; opts.len()];
+        let chosen = dialoguer::MultiSelect::with_theme(&dialoguer::theme::ColorfulTheme::default())
+            .with_prompt("Select sources to audit (space to toggle, enter to confirm)")
+            .items(&opts)
+            .defaults(&defaults)
+            .interact()
+            .unwrap_or_default();
+        chosen
+    };
+    if selected.is_empty() {
+        println!("{} Nothing selected.", style::muted(""));
+        return;
+    }
+
+    let sev_min = if let Some(s) = min_severity {
+        match s.to_ascii_lowercase().as_str() {
+            "critical" => 9.0,
+            "high" => 7.0,
+            "moderate" | "medium" => 4.0,
+            "low" => 1.0,
+            _ => 0.0,
         }
-        let label = rel_label(&dir_path, f);
-        for (name, version) in list {
-            queries.push(PackageQuery {
-                ecosystem: ec,
-                name,
-                version,
-                source: label.clone(),
-            });
+    } else if no_prompt {
+        0.0
+    } else {
+        let levels = [
+            "All severities",
+            "Critical + High",
+            "Critical + High + Moderate",
+            "Critical only",
+        ];
+        let idx = dialoguer::Select::with_theme(&dialoguer::theme::ColorfulTheme::default())
+            .with_prompt("Minimum severity to report")
+            .items(&levels)
+            .default(0)
+            .interact()
+            .unwrap_or(0);
+        match idx {
+            1 => 7.0,
+            2 => 4.0,
+            3 => 9.0,
+            _ => 0.0,
+        }
+    };
+
+    let mut findings: Vec<Finding> = Vec::new();
+    let mut checked: Vec<Checked> = Vec::new();
+    let mut ecosystems: Vec<&'static str> = Vec::new();
+
+    let mut queries: Vec<PackageQuery> = Vec::new();
+    for &i in &selected {
+        if let Source::Lockfile(f) = &sources[i].1 {
+            let ec = ecosystem_for(f).expect("lockfile has ecosystem");
+            if !ecosystems.contains(&ec) {
+                ecosystems.push(ec);
+            }
+            let label = rel_label(&dir_path, f);
+            for (name, version) in parse_lockfile(f) {
+                queries.push(PackageQuery {
+                    ecosystem: ec,
+                    name,
+                    version,
+                    source: label.clone(),
+                });
+            }
         }
     }
 
     if !queries.is_empty() {
-        let spin = style::Spinner::new(&format!(
-            "Querying {} OSV databases...",
-            queries.len()
-        ));
+        let spin = style::Spinner::new(&format!("Querying {} OSV databases...", queries.len()));
         let hits = osv_batch(&agent, &queries);
         let details = vuln_details(&agent, &hits);
         spin.done("OSV check complete");
 
         for q in &queries {
             let key = query_key(q);
-            let Some(ids) = hits.get(&key) else { continue };
+            let Some(ids) = hits.get(&key) else {
+                continue;
+            };
             if ids.is_empty() {
                 continue;
             }
-            let vulns: Vec<Vuln> = dedup_vulns(
+            let mut vulns: Vec<Vuln> = dedup_vulns(
                 ids.iter()
                     .filter_map(|id| details.get(id).cloned())
                     .collect(),
             );
+            vulns.retain(|v| sev_score(v.severity.as_deref()) >= sev_min);
             if vulns.is_empty() {
                 continue;
             }
@@ -117,18 +209,21 @@ pub fn run(dir: &str) {
         }
     }
 
-    if crate::utils::which("pacman") {
+    let mut ast_updated: Option<String> = None;
+    if system_avail && selected.iter().any(|&i| matches!(sources[i].1, Source::System)) {
+        ecosystems.push("Arch Security Tracker");
         let spin = style::Spinner::new("Checking Arch package advisories...");
-        let (sys, sys_count) = scan_system(&agent);
+        let (sys, sys_count, ast_upd) = scan_system(&agent);
         spin.done("Arch advisory check complete");
+        ast_updated = ast_upd;
         checked.push(Checked {
             source: "system (pacman)".to_string(),
             packages: sys_count,
         });
         findings.extend(sys);
-    } else {
+    } else if system_avail {
         println!(
-            "  {} pacman not found — skipping system package audit.",
+            "  {} System package audit skipped.",
             style::muted("")
         );
     }
@@ -136,6 +231,19 @@ pub fn run(dir: &str) {
     println!("{}", style::divider());
     print_findings(&findings);
     print_summary(&findings, &checked);
+    print_freshness(&agent, &ecosystems, ast_updated);
+    println!();
+
+    if !findings.is_empty() && !no_open {
+        let confirm = dialoguer::Confirm::with_theme(&dialoguer::theme::ColorfulTheme::default())
+            .with_prompt("Open the advisory pages in your browser?")
+            .default(false)
+            .interact()
+            .unwrap_or(false);
+        if confirm {
+            open_advisories(&findings);
+        }
+    }
 }
 
 fn new_agent() -> ureq::Agent {
@@ -456,6 +564,7 @@ fn vuln_details(agent: &ureq::Agent, hits: &BTreeMap<String, Vec<String>>) -> BT
                         Ok(v) => v,
                         Err(_) => return None,
                     };
+                    let url = format!("https://osv.dev/vulnerability/{}", id);
                     Some((
                         id.clone(),
                         Vuln {
@@ -472,6 +581,7 @@ fn vuln_details(agent: &ureq::Agent, hits: &BTreeMap<String, Vec<String>>) -> BT
                                 .and_then(|s| s.as_str())
                                 .map(|s| s.to_string()),
                             fixed: vuln_fixed(&value),
+                            url: Some(url),
                         },
                     ))
                 }));
@@ -602,12 +712,12 @@ fn vuln_fixed(rec: &serde_json::Value) -> Option<String> {
     best
 }
 
-fn scan_system(agent: &ureq::Agent) -> (Vec<Finding>, usize) {
+fn scan_system(agent: &ureq::Agent) -> (Vec<Finding>, usize, Option<String>) {
     let mut findings = Vec::new();
 
     let out = match Command::new("pacman").arg("-Q").output() {
         Ok(o) if o.status.success() => o,
-        _ => return (findings, 0),
+        _ => return (findings, 0, None),
     };
     let mut installed: Vec<(String, String)> = Vec::new();
     let mut foreign: BTreeSet<String> = BTreeSet::new();
@@ -625,15 +735,15 @@ fn scan_system(agent: &ureq::Agent) -> (Vec<Finding>, usize) {
         }
     }
 
-    let issues_value = match get_json(agent, AST_ISSUES) {
+    let (issues_value, ast_updated) = match get_json_meta(agent, AST_ISSUES) {
         Some(v) => v,
         None => {
             eprintln!("  {} Arch Security Tracker unreachable.", style::error(""));
-            return (findings, installed.len());
+            return (findings, installed.len(), None);
         }
     };
     let Some(issues) = issues_value.as_array() else {
-        return (findings, installed.len());
+        return (findings, installed.len(), None);
     };
 
     let mut by_pkg: BTreeMap<String, Vec<&serde_json::Value>> = BTreeMap::new();
@@ -665,6 +775,7 @@ fn scan_system(agent: &ureq::Agent) -> (Vec<Finding>, usize) {
                 .and_then(|n| n.as_str())
                 .unwrap_or("AVG")
                 .to_string();
+            let avg_url = format!("https://security.archlinux.org/{}", id);
             if let Some(cves) = issue.get("issues").and_then(|i| i.as_array()) {
                 let cves: Vec<String> = cves
                     .iter()
@@ -690,6 +801,7 @@ fn scan_system(agent: &ureq::Agent) -> (Vec<Finding>, usize) {
                     Some(format!("Arch advisory: {}", atype))
                 },
                 fixed: Some(fixed.to_string()),
+                url: Some(avg_url),
             });
         }
         if !vulns.is_empty() {
@@ -706,7 +818,7 @@ fn scan_system(agent: &ureq::Agent) -> (Vec<Finding>, usize) {
             });
         }
     }
-    (findings, installed.len())
+    (findings, installed.len(), ast_updated)
 }
 
 fn dedup_vulns(vulns: Vec<Vuln>) -> Vec<Vuln> {
@@ -724,9 +836,16 @@ fn dedup_vulns(vulns: Vec<Vuln>) -> Vec<Vuln> {
     map.into_values().collect()
 }
 
-fn get_json(agent: &ureq::Agent, url: &str) -> Option<serde_json::Value> {
+fn get_json_meta(
+    agent: &ureq::Agent,
+    url: &str,
+) -> Option<(serde_json::Value, Option<String>)> {
     let resp = agent.get(url).call().ok()?;
-    resp.into_json().ok()
+    let last_modified = resp
+        .header("last-modified")
+        .or_else(|| resp.header("date"))
+        .map(|s| s.to_string());
+    resp.into_json().ok().map(|v| (v, last_modified))
 }
 
 fn arch_version_lt(installed: &str, fixed: &str) -> bool {
@@ -906,6 +1025,202 @@ fn print_summary(findings: &[Finding], checked: &[Checked]) {
             "  {} {} vulnerable package(s) found — check the advisories above and update.",
             style::warn(""),
             vuln_pkgs.style(style::Theme::ERROR)
+        );
+    }
+}
+
+fn sev_score(sev: Option<&str>) -> f64 {
+    match sev.map(|s| s.to_ascii_lowercase()).as_deref() {
+        Some("critical") => 9.0,
+        Some("high") => 7.0,
+        Some("moderate") | Some("medium") => 4.0,
+        Some("low") => 1.0,
+        _ => 0.0,
+    }
+}
+
+fn print_freshness(agent: &ureq::Agent, ecosystems: &[&str], ast_updated: Option<String>) {
+    println!("  {} Data freshness:", style::muted(""));
+    for (ec, updated) in osv_freshness(agent, ecosystems) {
+        println!(
+            "    {}  {} {}",
+            style::muted("•"),
+            format!("{:<12}", ec).style(style::Theme::VALUE),
+            updated.style(style::Theme::VALUE)
+        );
+    }
+    if let Some(u) = ast_updated {
+        println!(
+            "    {}  {} {}",
+            style::muted("•"),
+            format!("{:<12}", "Arch Security Tracker").style(style::Theme::VALUE),
+            fmt_updated(Some(u)).style(style::Theme::VALUE)
+        );
+    }
+}
+
+fn osv_freshness(agent: &ureq::Agent, ecosystems: &[&str]) -> Vec<(String, String)> {
+    std::thread::scope(|s| {
+        let mut handles = Vec::new();
+        for ec in ecosystems {
+            if *ec == "Arch Security Tracker" {
+                continue;
+            }
+            let agent = agent.clone();
+            let ec = ec.to_string();
+            handles.push(s.spawn(move || {
+                let url = format!(
+                    "https://osv-vulnerabilities.storage.googleapis.com/{}/all.zip",
+                    ec
+                );
+                let lm = agent
+                    .head(&url)
+                    .call()
+                    .ok()
+                    .and_then(|r| r.header("last-modified").map(|x| x.to_string()));
+                (ec, fmt_updated(lm))
+            }));
+        }
+        let mut v: Vec<(String, String)> =
+            handles.into_iter().filter_map(|h| h.join().ok()).collect();
+        v.sort();
+        v
+    })
+}
+
+fn fmt_updated(last_modified: Option<String>) -> String {
+    let Some(lm) = last_modified else {
+        return "unknown".to_string();
+    };
+    match rfc2822_to_unix(&lm) {
+        Some(secs) => {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            if secs > now {
+                return format!("updated {}", rfc2822_date_short(&lm));
+            }
+            format!(
+                "updated {} ({} ago)",
+                rfc2822_date_short(&lm),
+                fmt_age(now - secs)
+            )
+        }
+        None => lm,
+    }
+}
+
+fn rfc2822_date_short(s: &str) -> String {
+    let toks: Vec<&str> = s.split_ascii_whitespace().collect();
+    if toks.len() < 4 {
+        return s.to_string();
+    }
+    let day: u32 = toks[1].trim_end_matches(',').parse().unwrap_or(0);
+    let month = month_num(toks[2]);
+    let time = toks.get(4).unwrap_or(&"");
+    match (day, month, time.len()) {
+        (d, Some(m), n) if n >= 5 => format!("{}-{:02}-{:02} {}", toks[3], m, d, &time[..5]),
+        (d, Some(m), _) => format!("{}-{:02}-{:02}", toks[3], m, d),
+        _ => s.to_string(),
+    }
+}
+
+fn month_num(s: &str) -> Option<u32> {
+    match s {
+        "Jan" => Some(1),
+        "Feb" => Some(2),
+        "Mar" => Some(3),
+        "Apr" => Some(4),
+        "May" => Some(5),
+        "Jun" => Some(6),
+        "Jul" => Some(7),
+        "Aug" => Some(8),
+        "Sep" => Some(9),
+        "Oct" => Some(10),
+        "Nov" => Some(11),
+        "Dec" => Some(12),
+        _ => None,
+    }
+}
+
+fn fmt_age(secs: u64) -> String {
+    if secs < 90 {
+        return format!("{}s", secs);
+    }
+    if secs < 3600 {
+        return format!("{}m", secs / 60);
+    }
+    if secs < 86_400 {
+        return format!("{}h", secs / 3600);
+    }
+    format!("{}d", secs / 86_400)
+}
+
+fn rfc2822_to_unix(s: &str) -> Option<u64> {
+    let toks: Vec<&str> = s.split_ascii_whitespace().collect();
+    if toks.len() < 5 {
+        return None;
+    }
+    let day: i64 = toks[1].trim_end_matches(',').parse().ok()?;
+    let month: i64 = month_num(toks[2])? as i64;
+    let year: i64 = toks[3].parse().ok()?;
+    let hms: Vec<&str> = toks[4].split(':').collect();
+    if hms.len() < 3 {
+        return None;
+    }
+    let hh: i64 = hms[0].parse().ok()?;
+    let mm: i64 = hms[1].parse().ok()?;
+    let ss: i64 = hms[2].parse().ok()?;
+    let days = days_from_civil(year, month, day);
+    Some((days * 86_400 + hh * 3600 + mm * 60 + ss) as u64)
+}
+
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
+fn open_advisories(findings: &[Finding]) {
+    let mut urls: Vec<String> = Vec::new();
+    for f in findings {
+        for v in &f.vulns {
+            if let Some(u) = &v.url {
+                if !urls.contains(u) {
+                    urls.push(u.clone());
+                }
+            }
+        }
+    }
+    if urls.is_empty() {
+        return;
+    }
+    let opener = if crate::utils::which("xdg-open") {
+        "xdg-open"
+    } else if crate::utils::which("open") {
+        "open"
+    } else {
+        println!(
+            "  {} No browser opener found — open these manually:",
+            style::muted("")
+        );
+        for u in urls.iter().take(5) {
+            println!("    {}", u);
+        }
+        return;
+    };
+    for u in urls.iter().take(5) {
+        let _ = Command::new(opener).arg(u).spawn();
+    }
+    if urls.len() > 5 {
+        println!(
+            "  {} Opened the first 5 of {} advisories in the browser.",
+            style::muted(""),
+            urls.len()
         );
     }
 }

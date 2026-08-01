@@ -257,10 +257,19 @@ pub enum Commands {
     AuditDeps {
         #[arg(
             value_name = "DIR",
-            default_value = ".",
-            help = "Directory to scan (default: current directory)"
+            help = "Directory to scan (interactively prompted if omitted)"
         )]
-        dir: String,
+        dir: Option<String>,
+        #[arg(long, help = "Skip interactive prompts and audit everything")]
+        no_prompt: bool,
+        #[arg(long, help = "Never ask to open advisories in the browser")]
+        no_open: bool,
+        #[arg(
+            long,
+            value_name = "LEVEL",
+            help = "Minimum severity to report: low, moderate, high, critical, all"
+        )]
+        min_severity: Option<String>,
     },
     #[command(
         name = "cert-check",
@@ -379,7 +388,12 @@ pub fn run(cli: Cli) {
         Some(Commands::CleanCache { serve, port }) => {
             commands::cleancache::run(serve, port)
         }
-        Some(Commands::AuditDeps { dir }) => commands::auditdeps::run(&dir),
+        Some(Commands::AuditDeps {
+            dir,
+            no_prompt,
+            no_open,
+            min_severity,
+        }) => commands::auditdeps::run(dir, no_prompt, no_open, min_severity),
         Some(Commands::CertCheck { domain }) => commands::cert::run(&domain),
         Some(Commands::DnsLookup { domain }) => commands::dns::run(&domain),
         Some(Commands::LocalS3) => commands::locals3::run(),
