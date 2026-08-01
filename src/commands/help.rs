@@ -108,6 +108,11 @@ fn print_general_help() {
         "<LOCAL:HOST:REMOTE>",
         "SSH forwarding with auto-retry",
     );
+    print_cmd(
+        "download",
+        "video|music",
+        "Download videos & music via yt-dlp",
+    );
 
     println!("\n{}", "FLAGS:".style(style::Theme::HEADER));
     print_cmd("--version", "", "Print version and exit");
@@ -435,6 +440,28 @@ fn print_command_help(command: &str) {
             println!("{}", "FEATURES:".style(style::Theme::HEADER));
             println!("  Auto-reconnects dropped connections, monitors the local");
             println!("  port and shows UP/DOWN status changes.");
+        }
+        "download" => {
+            println!("{}", "proto download".style(style::Theme::HEADER));
+            println!("  Download videos and music via yt-dlp.\n");
+            println!("{}", "VIDEO:".style(style::Theme::HEADER));
+            println!("  proto download video [URL]             Interactive (prompts URL if missing)");
+            println!("  proto download video <URL> --format 1080p --dir ~/Videos");
+            println!("  proto download video <URL> --format audio-mp3 --subtitles\n");
+            println!("  FORMATS: best | 1080p | 720p | 480p | audio-mp3\n");
+            println!("{}", "MUSIC:".style(style::Theme::HEADER));
+            println!("  proto download music <URL>             YouTube or SoundCloud playlist");
+            println!("  proto download music <URL> --amount 10 --browser firefox\n");
+            println!("{}", "SOUNDCLOUD:".style(style::Theme::HEADER));
+            println!("  Tracks go to <dir>/<uploader>/<title>.mp3 (256k + metadata/cover).");
+            println!("  download_log.txt tracks already-downloaded songs; failures are");
+            println!("  written to download_log_ERROR.txt. Runs >15 min are skipped.");
+            println!("  Cookies come from the browser (default: opera).\n");
+            println!("  proto download music https://soundcloud.com/artist --artist");
+            println!("      Downloads an artist's whole catalog (profile page).\n");
+            println!("{}", "YOUTUBE:".style(style::Theme::HEADER));
+            println!("  mp3 256k per-uploader folders. Options: --amount N, --newest,");
+            println!("  --yes (skip confirmations), --dir <path>.");
         }
         other => {
             println!(

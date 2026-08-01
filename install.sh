@@ -134,7 +134,7 @@ _proto_completion() {
     word2="${COMP_WORDS[2]}"
     word3="${COMP_WORDS[3]}"
 
-    local commands="help system alias share-session pkg git setup mc status discord convert encrypt app ai copy-ctx memo secret webhook pr-prep pr-checkout git-who-broke git-impact git-catchup share dedupe media cert-check dns-lookup local-s3 port-forward"
+    local commands="help system alias share-session pkg git setup mc status discord convert encrypt app ai copy-ctx memo secret webhook pr-prep pr-checkout git-who-broke git-impact git-catchup share dedupe media cert-check dns-lookup local-s3 port-forward download"
     local pkg_actions="install search remove update list build"
     local pack_actions="create edit build test"
     local git_actions="log stats save undo branch"
@@ -148,6 +148,7 @@ _proto_completion() {
     local memo_actions="add list clear"
     local alias_actions="create list remove"
     local media_actions="shrink"
+    local download_actions="video music"
 
     case "${prev}" in
         proto) COMPREPLY=( $(compgen -W "${commands}" -- "${cur}") ); return 0 ;;
@@ -172,6 +173,7 @@ _proto_completion() {
         secret) COMPREPLY=( $(compgen -W "mask" -- "${cur}") ); return 0 ;;
         webhook) COMPREPLY=( $(compgen -W "listen" -- "${cur}") ); return 0 ;;
         media) COMPREPLY=( $(compgen -W "${media_actions}" -- "${cur}") ); return 0 ;;
+        download) COMPREPLY=( $(compgen -W "${download_actions}" -- "${cur}") ); return 0 ;;
         help) COMPREPLY=( $(compgen -W "${commands}" -- "${cur}") ); return 0 ;;
     esac
 
@@ -228,6 +230,7 @@ _proto() {
         'dns-lookup:Query DNS records'
         'local-s3:Spin up an ephemeral MinIO server'
         'port-forward:SSH port forwarding with auto-retry'
+        'download:Download videos & music via yt-dlp'
     )
     local -a pkg_actions
     pkg_actions=(
@@ -316,6 +319,11 @@ _proto() {
     media_actions=(
         'shrink:Compress media files'
     )
+    local -a download_actions
+    download_actions=(
+        'video:Download videos'
+        'music:Download music'
+    )
     _arguments -C \
         '--version[Print version]' \
         '--help[Print help]' \
@@ -334,6 +342,7 @@ _proto() {
                 memo) _describe -t actions 'memo action' memo_actions ;;
                 alias) _describe -t actions 'alias action' alias_actions ;;
                 media) _describe -t actions 'media action' media_actions ;;
+                download) _describe -t actions 'download action' download_actions ;;
             esac
             case $words[2] in
                 resource_pack) _describe -t actions 'resource_pack' rp_actions ;;
@@ -382,6 +391,7 @@ complete -c proto -n "__fish_use_subcommand" -a cert-check -d "Inspect a remote 
 complete -c proto -n "__fish_use_subcommand" -a dns-lookup -d "Query DNS records"
 complete -c proto -n "__fish_use_subcommand" -a local-s3 -d "Spin up an ephemeral MinIO server"
 complete -c proto -n "__fish_use_subcommand" -a port-forward -d "SSH port forwarding with auto-retry"
+complete -c proto -n "__fish_use_subcommand" -a download -d "Download videos & music"
 
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a install -d "Install packages"
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a search -d "Search packages"
@@ -457,6 +467,9 @@ complete -c proto -n "__fish_seen_subcommand_from secret" -a mask -d "Scan and m
 complete -c proto -n "__fish_seen_subcommand_from webhook" -a listen -d "Listen for webhooks"
 
 complete -c proto -n "__fish_seen_subcommand_from media" -a shrink -d "Compress media files"
+
+complete -c proto -n "__fish_seen_subcommand_from download" -a video -d "Download videos"
+complete -c proto -n "__fish_seen_subcommand_from download" -a music -d "Download music"
 
 complete -c proto -l version -d "Print version"
 complete -c proto -l help -d "Print help"

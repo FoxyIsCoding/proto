@@ -186,6 +186,11 @@ pub enum Commands {
         #[command(subcommand)]
         action: commands::media::MediaAction,
     },
+    #[command(about = "Download videos and music via yt-dlp")]
+    Download {
+        #[command(subcommand)]
+        action: commands::download::DownloadAction,
+    },
     #[command(
         name = "cert-check",
         about = "Inspect the TLS certificate of a remote server"
@@ -284,6 +289,7 @@ pub fn run(cli: Cli) {
         Some(Commands::Share { file }) => commands::upload::run(&file),
         Some(Commands::Dedupe { dir }) => commands::dedupe::run(&dir),
         Some(Commands::Media { action }) => commands::media::run(&action),
+        Some(Commands::Download { action }) => commands::download::run(&action),
         Some(Commands::CertCheck { domain }) => commands::cert::run(&domain),
         Some(Commands::DnsLookup { domain }) => commands::dns::run(&domain),
         Some(Commands::LocalS3) => commands::locals3::run(),

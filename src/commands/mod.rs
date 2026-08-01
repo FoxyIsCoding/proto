@@ -6,6 +6,7 @@ pub mod convert;
 pub mod copyctx;
 pub mod dedupe;
 pub mod discord;
+pub mod download;
 pub mod dns;
 pub mod encrypt;
 pub mod git;
