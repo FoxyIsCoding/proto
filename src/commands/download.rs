@@ -35,6 +35,12 @@ pub enum DownloadAction {
         dir: String,
         #[arg(long, value_name = "BROWSER", help = "Browser to pull cookies from (default: auto-detect)")]
         browser: Option<String>,
+        #[arg(
+            long,
+            value_name = "FILE",
+            help = "Use a cookies.txt file (most reliable; overrides --browser)"
+        )]
+        cookies_file: Option<String>,
         #[arg(long, value_name = "N", help = "Limit how many new tracks to download")]
         amount: Option<usize>,
         #[arg(long, help = "Sort newest-first instead of playlist order")]
@@ -77,11 +83,21 @@ pub fn run(action: &DownloadAction) {
             url,
             dir,
             browser,
+            cookies_file,
             amount,
             newest,
             artist,
             yes,
-        } => music(url.as_deref(), dir, browser.as_deref(), *amount, *newest, *artist, *yes),
+        } => music(
+            url.as_deref(),
+            dir,
+            browser.as_deref(),
+            cookies_file.as_deref(),
+            *amount,
+            *newest,
+            *artist,
+            *yes,
+        ),
     }
 }
 
@@ -217,10 +233,12 @@ fn format_label(f: VideoFormat) -> &'static str {
 
 // ---------------------------------------------------------------- music flow
 
+#[allow(clippy::too_many_arguments)]
 fn music(
     url_opt: Option<&str>,
     dir: &str,
     browser: Option<&str>,
+    cookies_file: Option<&str>,
     amount: Option<usize>,
     newest: bool,
     artist: bool,
@@ -240,7 +258,7 @@ fn music(
         detect_platform(&url)
     };
     match platform {
-        Platform::Soundcloud => soundcloud(&url, dir, browser, amount, newest, artist),
+        Platform::Soundcloud => soundcloud(&url, dir, browser, cookies_file, amount, newest, artist),
         Platform::Youtube => youtube_music(&url, dir, amount, newest, yes),
     }
 }
@@ -406,10 +424,25 @@ enum SortOrder {
 
 // ------------------------------------------------- soundcloud (Rust port)
 
+enum Cookies {
+    File(String),
+    Browser(String),
+}
+
+impl Cookies {
+    fn ytdlp_args(&self) -> Vec<String> {
+        match self {
+            Cookies::File(path) => vec!["--cookies".into(), path.clone()],
+            Cookies::Browser(name) => vec!["--cookies-from-browser".into(), name.clone()],
+        }
+    }
+}
+
 fn soundcloud(
     url: &str,
     dir: &str,
     browser: Option<&str>,
+    cookies_file: Option<&str>,
     amount: Option<usize>,
     newest: bool,
     artist: bool,
@@ -442,16 +475,19 @@ fn soundcloud(
         }
     }
 
-    let browser = resolve_browser(browser);
+    let cookies = if let Some(f) = cookies_file {
+        Some(Cookies::File(f.to_string()))
+    } else {
+        resolve_browser(browser).map(Cookies::Browser)
+    };
+    let cookies_label = match &cookies {
+        Some(Cookies::File(f)) => format!("file ({})", f),
+        Some(Cookies::Browser(b)) => b.clone(),
+        None => "none (public content)".to_string(),
+    };
     println!(
         "  {}",
-        style::label_value(
-            "Cookies",
-            match &browser {
-                Some(b) => b.as_str(),
-                None => "none (public content)",
-            }
-        )
+        style::label_value("Cookies", &cookies_label)
     );
 
     let mut previous = std::collections::HashSet::new();
@@ -462,7 +498,7 @@ fn soundcloud(
     );
 
     let sp = style::Spinner::new("Fetching playlist entries...");
-    let json = match fetch_entries(url, browser.as_deref()) {
+    let json = match fetch_entries(url, cookies.as_ref()) {
         Ok(j) => j,
         Err(reason) => {
             sp.fail(&format!(
@@ -567,9 +603,8 @@ fn soundcloud(
     let mut args: Vec<String> = Vec::new();
     args.push("--batch-file".into());
     args.push(batch.to_string_lossy().to_string());
-    if let Some(b) = &browser {
-        args.push("--cookies-from-browser".into());
-        args.push(b.clone());
+    if let Some(c) = &cookies {
+        args.extend(c.ytdlp_args());
     }
     args.push("-f".into());
     args.push("bestaudio".into());
@@ -649,21 +684,20 @@ fn read_download_log(path: &Path, out: &mut std::collections::HashSet<String>) {
     }
 }
 
-fn fetch_entries(url: &str, browser: Option<&str>) -> Result<serde_json::Value, String> {
-    if let Ok(v) = run_fetch(url, None) {
-        return Ok(v);
+fn fetch_entries(url: &str, cookies: Option<&Cookies>) -> Result<serde_json::Value, String> {
+    if let Some(c) = cookies {
+        if let Ok(v) = run_fetch(url, Some(c)) {
+            return Ok(v);
+        }
     }
-    if let Some(b) = browser {
-        return run_fetch(url, Some(b));
-    }
-    Err("public fetch failed and no browser found".to_string())
+    run_fetch(url, None)
 }
 
-fn run_fetch(url: &str, browser: Option<&str>) -> Result<serde_json::Value, String> {
+fn run_fetch(url: &str, cookies: Option<&Cookies>) -> Result<serde_json::Value, String> {
     let mut cmd = Command::new("yt-dlp");
     cmd.args(["--flat-playlist", "--dump-single-json", "--no-warnings"]);
-    if let Some(b) = browser {
-        cmd.args(["--cookies-from-browser", b]);
+    if let Some(c) = cookies {
+        cmd.args(c.ytdlp_args());
     }
     let out = cmd
         .arg(url)

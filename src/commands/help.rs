@@ -113,6 +113,36 @@ fn print_general_help() {
         "video|music",
         "Download videos & music via yt-dlp",
     );
+    print_cmd(
+        "battery",
+        "[--serve]",
+        "Laptop battery health & live wattage",
+    );
+    print_cmd(
+        "kill-heavy",
+        "[--cpu N] [--mem MB]",
+        "Find & kill high CPU/RAM processes",
+    );
+    print_cmd(
+        "ports",
+        "[--serve]",
+        "Interactive listening-ports dashboard",
+    );
+    print_cmd(
+        "tree-view",
+        "[--depth N] [DIR]",
+        "ASCII folder tree that respects .gitignore",
+    );
+    print_cmd(
+        "docker",
+        "containers|prune-safe",
+        "Docker container manager & safe pruning",
+    );
+    print_cmd(
+        "clean-cache",
+        "[--serve]",
+        "Scan & clean npm/pip/cargo/docker caches",
+    );
 
     println!("\n{}", "FLAGS:".style(style::Theme::HEADER));
     print_cmd("--version", "", "Print version and exit");
@@ -463,6 +493,80 @@ fn print_command_help(command: &str) {
             println!("{}", "YOUTUBE:".style(style::Theme::HEADER));
             println!("  mp3 256k per-uploader folders. Options: --amount N, --newest,");
             println!("  --yes (skip confirmations), --dir <path>.");
+        }
+        "battery" => {
+            println!("{}", "proto battery".style(style::Theme::HEADER));
+            println!("  Laptop battery health diagnostics.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto battery                       Show health snapshot");
+            println!("  proto battery --serve               Live-stream to the panel");
+            println!("  proto battery --serve --interval 2  Poll every 2s\n");
+            println!("{}", "SHOWS:".style(style::Theme::HEADER));
+            println!("  Charge %, cycle count, current vs design capacity,");
+            println!("  health %, and live draw in watts (when discharging).");
+            println!("  Reads /sys/class/power_supply/BAT* (requires a battery).");
+        }
+        "kill-heavy" => {
+            println!("{}", "proto kill-heavy".style(style::Theme::HEADER));
+            println!("  Find and interactively kill heavy processes.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto kill-heavy                    Flag >10% CPU or >512MB RSS");
+            println!("  proto kill-heavy --cpu 5 --mem 256  Lower thresholds");
+            println!("  proto kill-heavy --all              Show every process");
+            println!("  proto kill-heavy --serve            Send scan to the panel\n");
+            println!("{}", "FLOW:".style(style::Theme::HEADER));
+            println!("  1. Lists top 15 heavy processes (multi-select)");
+            println!("  2. Sends SIGTERM, escalates to SIGKILL after ~1s");
+        }
+        "ports" => {
+            println!("{}", "proto ports".style(style::Theme::HEADER));
+            println!("  Interactive listening-ports dashboard.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto ports                         Terminal dashboard");
+            println!("  proto ports --serve                 Stream to the panel\n");
+            println!("{}", "FEATURES:".style(style::Theme::HEADER));
+            println!("  Parses `ss -tulpnH`; shows proto, port, pid, process,");
+            println!("  and address. Select an entry to kill it (after confirm).");
+            println!("  Requires iproute2 (ss).");
+        }
+        "tree-view" => {
+            println!("{}", "proto tree-view".style(style::Theme::HEADER));
+            println!("  ASCII folder tree that respects .gitignore.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto tree-view                     Current dir, depth 2");
+            println!("  proto tree-view src --depth 3       Deeper tree");
+            println!("  proto tree-view --hidden            Include hidden files\n");
+            println!("{}", "FEATURES:".style(style::Theme::HEADER));
+            println!("  Respects .gitignore rules (incl. !negations and dir-only),");
+            println!("  ignores .git and target/ by default, sorts dirs first.");
+        }
+        "docker" => {
+            println!("{}", "proto docker".style(style::Theme::HEADER));
+            println!("  Docker container manager & safe pruning.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto docker containers              Interactive manager");
+            println!("  proto docker containers --serve      Stream to the panel");
+            println!("  proto docker prune-safe              Remove dangling objects\n");
+            println!("{}", "CONTAINERS:".style(style::Theme::HEADER));
+            println!("  List running (or --all) containers; start/stop/restart,");
+            println!("  logs, inspect, or remove the selected one.\n");
+            println!("{}", "PRUNE-SAFE:".style(style::Theme::HEADER));
+            println!("  Removes dangling images, stopped containers, and unused");
+            println!("  volumes — but keeps anything matching the current git branch.");
+            println!("  Shows `docker system df` BEFORE and AFTER, with a confirm.");
+        }
+        "clean-cache" => {
+            println!("{}", "proto clean-cache".style(style::Theme::HEADER));
+            println!("  Scan and interactively clean build & package caches.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto clean-cache                   Interactive scan & clean");
+            println!("  proto clean-cache --serve           Send scan to the panel\n");
+            println!("{}", "SCANS:".style(style::Theme::HEADER));
+            println!("  npm, pip, uv, bun, yarn, cargo, yay, paru, pacman (sudo),");
+            println!("  apt (sudo), dnf (sudo), and docker builder cache.\n");
+            println!("{}", "SHOWS:".style(style::Theme::HEADER));
+            println!("  Disk free before and after cleaning + bytes recovered.");
+            println!("  Always asks for confirmation before deleting anything.");
         }
         other => {
             println!(

@@ -140,7 +140,7 @@ fn generate_bash_completion() -> String {
     word2="${COMP_WORDS[2]}"
     word3="${COMP_WORDS[3]}"
 
-    local commands="help system alias share-session pkg git setup mc status discord convert encrypt app ai copy-ctx memo secret webhook pr-prep pr-checkout git-who-broke git-impact git-catchup share dedupe media cert-check dns-lookup local-s3 port-forward download"
+    local commands="help system alias share-session pkg git setup mc status discord convert encrypt app ai copy-ctx memo secret webhook pr-prep pr-checkout git-who-broke git-impact git-catchup share dedupe media cert-check dns-lookup local-s3 port-forward download battery kill-heavy ports tree-view docker clean-cache"
     local pkg_actions="install search remove update list build"
     local pack_actions="create edit build test"
     local git_actions="log stats save undo branch"
@@ -155,6 +155,7 @@ fn generate_bash_completion() -> String {
     local alias_actions="create list remove"
     local media_actions="shrink"
     local download_actions="video music"
+    local docker_actions="containers prune-safe"
 
     case "${prev}" in
         proto) COMPREPLY=( $(compgen -W "${commands}" -- "${cur}") ); return 0 ;;
@@ -180,6 +181,7 @@ fn generate_bash_completion() -> String {
         webhook) COMPREPLY=( $(compgen -W "listen" -- "${cur}") ); return 0 ;;
         media) COMPREPLY=( $(compgen -W "${media_actions}" -- "${cur}") ); return 0 ;;
         download) COMPREPLY=( $(compgen -W "${download_actions}" -- "${cur}") ); return 0 ;;
+        docker) COMPREPLY=( $(compgen -W "${docker_actions}" -- "${cur}") ); return 0 ;;
         help) COMPREPLY=( $(compgen -W "${commands}" -- "${cur}") ); return 0 ;;
     esac
 
@@ -235,6 +237,12 @@ _proto() {
         'local-s3:Spin up an ephemeral MinIO server'
         'port-forward:SSH port forwarding with auto-retry'
         'download:Download videos & music via yt-dlp'
+        'battery:Laptop battery health & wattage'
+        'kill-heavy:Find & kill high CPU/RAM processes'
+        'ports:Interactive listening-ports dashboard'
+        'tree-view:ASCII folder tree that respects .gitignore'
+        'docker:Docker container manager & safe pruning'
+        'clean-cache:Scan & clean build and package caches'
     )
 
     local -a pkg_actions
@@ -342,6 +350,11 @@ _proto() {
         'video:Download videos'
         'music:Download music'
     )
+    local -a docker_actions
+    docker_actions=(
+        'containers:Interactive container manager'
+        'prune-safe:Remove dangling objects safely'
+    )
 
     _arguments -C \
         '--version[Print version]' \
@@ -363,6 +376,7 @@ _proto() {
                 alias) _describe -t actions 'alias action' alias_actions ;;
                 media) _describe -t actions 'media action' media_actions ;;
                 download) _describe -t actions 'download action' download_actions ;;
+                docker) _describe -t actions 'docker action' docker_actions ;;
             esac
             case $words[2] in
                 resource_pack) _describe -t actions 'resource_pack' rp_actions ;;
@@ -411,6 +425,12 @@ complete -c proto -n "__fish_use_subcommand" -a dns-lookup -d "Query DNS records
 complete -c proto -n "__fish_use_subcommand" -a local-s3 -d "Spin up an ephemeral MinIO server"
 complete -c proto -n "__fish_use_subcommand" -a port-forward -d "SSH port forwarding with auto-retry"
 complete -c proto -n "__fish_use_subcommand" -a download -d "Download videos & music"
+complete -c proto -n "__fish_use_subcommand" -a battery -d "Laptop battery health & wattage"
+complete -c proto -n "__fish_use_subcommand" -a kill-heavy -d "Find & kill high CPU/RAM processes"
+complete -c proto -n "__fish_use_subcommand" -a ports -d "Interactive listening-ports dashboard"
+complete -c proto -n "__fish_use_subcommand" -a tree-view -d "ASCII folder tree that respects .gitignore"
+complete -c proto -n "__fish_use_subcommand" -a docker -d "Docker container manager & safe pruning"
+complete -c proto -n "__fish_use_subcommand" -a clean-cache -d "Scan & clean build and package caches"
 
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a install -d "Install packages"
 complete -c proto -n "__fish_seen_subcommand_from pkg" -a search -d "Search packages"
@@ -489,6 +509,9 @@ complete -c proto -n "__fish_seen_subcommand_from media" -a shrink -d "Compress 
 
 complete -c proto -n "__fish_seen_subcommand_from download" -a video -d "Download videos"
 complete -c proto -n "__fish_seen_subcommand_from download" -a music -d "Download music"
+
+complete -c proto -n "__fish_seen_subcommand_from docker" -a containers -d "Interactive container manager"
+complete -c proto -n "__fish_seen_subcommand_from docker" -a prune-safe -d "Remove dangling objects safely"
 
 complete -c proto -l version -d "Print version"
 complete -c proto -l help -d "Print help"

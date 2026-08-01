@@ -1,5 +1,6 @@
 mod style;
 mod utils;
+mod panel;
 mod commands;
 mod cli;
 

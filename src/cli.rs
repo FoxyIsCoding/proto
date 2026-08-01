@@ -191,6 +191,65 @@ pub enum Commands {
         #[command(subcommand)]
         action: commands::download::DownloadAction,
     },
+    #[command(about = "Battery health diagnostics for laptops")]
+    Battery {
+        #[arg(long, help = "Stream to the panel webserver")]
+        serve: bool,
+        #[arg(long, default_value_t = 5, help = "Interval in seconds")]
+        interval: u64,
+        #[arg(long, default_value_t = crate::panel::default_port(), help = "Panel port")]
+        port: u16,
+    },
+    #[command(
+        name = "kill-heavy",
+        about = "Find and interactively kill high CPU/RAM processes"
+    )]
+    KillHeavy {
+        #[arg(long, default_value_t = 10.0, help = "Minimum CPU %% to flag")]
+        cpu: f64,
+        #[arg(long, default_value_t = 512, help = "Minimum RSS in MB to flag")]
+        mem: u64,
+        #[arg(long, help = "Show every process, not just heavy ones")]
+        all: bool,
+        #[arg(long, help = "Send the scan to the panel webserver")]
+        serve: bool,
+        #[arg(long, default_value_t = crate::panel::default_port(), help = "Panel port")]
+        port: u16,
+    },
+    #[command(about = "Interactive dashboard of listening ports")]
+    Ports {
+        #[arg(long, help = "Stream to the panel webserver")]
+        serve: bool,
+        #[arg(long, default_value_t = crate::panel::default_port(), help = "Panel port")]
+        port: u16,
+    },
+    #[command(
+        name = "tree-view",
+        about = "ASCII folder tree that respects .gitignore"
+    )]
+    TreeView {
+        #[arg(value_name = "DIR", default_value = ".", help = "Directory to show")]
+        dir: String,
+        #[arg(long, default_value_t = 2, help = "Maximum depth")]
+        depth: usize,
+        #[arg(long, help = "Include hidden files and folders")]
+        hidden: bool,
+    },
+    #[command(about = "Docker container manager and safe pruning")]
+    Docker {
+        #[command(subcommand)]
+        action: commands::docker::DockerAction,
+    },
+    #[command(
+        name = "clean-cache",
+        about = "Scan and interactively clean build & package caches"
+    )]
+    CleanCache {
+        #[arg(long, help = "Send the scan to the panel webserver")]
+        serve: bool,
+        #[arg(long, default_value_t = crate::panel::default_port(), help = "Panel port")]
+        port: u16,
+    },
     #[command(
         name = "cert-check",
         about = "Inspect the TLS certificate of a remote server"
@@ -290,6 +349,24 @@ pub fn run(cli: Cli) {
         Some(Commands::Dedupe { dir }) => commands::dedupe::run(&dir),
         Some(Commands::Media { action }) => commands::media::run(&action),
         Some(Commands::Download { action }) => commands::download::run(&action),
+        Some(Commands::Battery { serve, interval, port }) => {
+            commands::battery::run(serve, interval, port)
+        }
+        Some(Commands::KillHeavy {
+            cpu,
+            mem,
+            all,
+            serve,
+            port,
+        }) => commands::killheavy::run(cpu, mem, all, serve, port),
+        Some(Commands::Ports { serve, port }) => commands::ports::run(serve, port),
+        Some(Commands::TreeView { dir, depth, hidden }) => {
+            commands::treeview::run(&dir, depth, hidden)
+        }
+        Some(Commands::Docker { action }) => commands::docker::run(&action),
+        Some(Commands::CleanCache { serve, port }) => {
+            commands::cleancache::run(serve, port)
+        }
         Some(Commands::CertCheck { domain }) => commands::cert::run(&domain),
         Some(Commands::DnsLookup { domain }) => commands::dns::run(&domain),
         Some(Commands::LocalS3) => commands::locals3::run(),

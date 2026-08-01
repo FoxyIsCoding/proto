@@ -132,6 +132,10 @@ pub fn error(msg: &str) -> String {
     format!("{} {}", "✗".style(Theme::ERROR), msg)
 }
 
+pub fn muted(msg: &str) -> String {
+    format!("{}", msg.style(Theme::MUTED))
+}
+
 pub fn section(title: &str) -> String {
     format!(
         "\n{}\n{}\n",
