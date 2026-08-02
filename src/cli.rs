@@ -323,6 +323,105 @@ pub enum Commands {
         )]
         interval: u64,
     },
+    #[command(
+        name = "readme-init",
+        about = "Generate a README.md for a new project"
+    )]
+    ReadmeInit {
+        #[arg(value_name = "NAME", help = "Project name")]
+        name: Option<String>,
+        #[arg(long, value_name = "DESC", help = "Short description")]
+        desc: Option<String>,
+        #[arg(long, value_name = "LICENSE", help = "License (default: MIT)")]
+        license: Option<String>,
+    },
+    #[command(about = "Pomodoro focus timer with work/break intervals")]
+    Focus {
+        #[arg(long, default_value_t = 25, help = "Work minutes")]
+        work: u64,
+        #[arg(long = "short", default_value_t = 5, help = "Short break minutes")]
+        short_break: u64,
+        #[arg(long, default_value_t = 15, help = "Long break minutes")]
+        long_break: u64,
+        #[arg(long, default_value_t = 4, help = "Number of cycles")]
+        cycles: u64,
+    },
+    #[command(about = "Measure internet download speed")]
+    Speedtest,
+    #[command(
+        name = "search-docs",
+        about = "Search documentation via cheat.sh or tldr"
+    )]
+    SearchDocs {
+        #[arg(value_name = "QUERY", help = "Search query")]
+        query: String,
+        #[arg(long = "source", value_name = "SRC", help = "cheat, tldr")]
+        source: Option<String>,
+    },
+    #[command(about = "Read a file with syntax-highlighted output")]
+    Reader {
+        #[arg(value_name = "FILE", help = "Path to file")]
+        file: String,
+    },
+    #[command(about = "Record a terminal session (asciinema wrapper)")]
+    Asciicast {
+        #[arg(short = 'o', long, value_name = "OUTPUT", help = "Output file")]
+        output: Option<String>,
+        #[arg(
+            value_name = "CMD",
+            num_args = 0..,
+            trailing_var_arg = true,
+            help = "Command to record (default: shell)"
+        )]
+        cmd: Vec<String>,
+    },
+    #[command(about = "Generate a QR code in the terminal (and optionally PNG)")]
+    Qr {
+        #[arg(value_name = "TEXT", help = "Text to encode")]
+        text: String,
+        #[arg(short = 'o', long, value_name = "OUTPUT", help = "Save as PNG file")]
+        out: Option<String>,
+    },
+    #[command(
+        name = "render-md",
+        about = "Render Markdown files directly in the terminal"
+    )]
+    RenderMd {
+        #[arg(value_name = "FILE", help = "Markdown file path")]
+        file: String,
+    },
+    #[command(
+        name = "color-palette",
+        about = "Display ANSI color palette in the terminal"
+    )]
+    ColorPalette,
+    #[command(about = "Simple local todo list manager (add, list, done, remove)")]
+    Todo {
+        #[arg(value_name = "ACTION", help = "add, list, done, or remove")]
+        action: String,
+        #[arg(
+            value_name = "TEXT",
+            num_args = 0..,
+            help = "Task text (for add) or ID (for done/remove)"
+        )]
+        text: Vec<String>,
+        #[arg(short = 'i', long, default_value_t = 0, help = "Task ID (for done/remove)")]
+        id: usize,
+    },
+    #[command(
+        name = "gen-pass",
+        about = "Generate secure random passwords"
+    )]
+    GenPass {
+        #[arg(short = 'l', long, default_value_t = 20, help = "Password length")]
+        length: usize,
+        #[arg(long, help = "Exclude symbols")]
+        no_symbols: bool,
+        #[arg(long, help = "Exclude numbers")]
+        no_numbers: bool,
+        #[arg(short = 'n', long, default_value_t = 1, help = "Number of passwords")]
+        count: usize,
+    },
 }
 
 pub fn run(cli: Cli) {
@@ -415,6 +514,31 @@ pub fn run(cli: Cli) {
             retries,
             interval,
         }) => commands::portfwd::run(&spec, retries, interval),
+        Some(Commands::ReadmeInit { name, desc, license }) => {
+            commands::readme::run(name, desc, license)
+        }
+        Some(Commands::Focus {
+            work,
+            short_break,
+            long_break,
+            cycles,
+        }) => commands::focus::run(work, short_break, long_break, cycles),
+        Some(Commands::Speedtest) => commands::speedtest::run(),
+        Some(Commands::SearchDocs { query, source }) => {
+            commands::searchdocs::run(query, source)
+        }
+        Some(Commands::Reader { file }) => commands::reader::run(file),
+        Some(Commands::Asciicast { output, cmd }) => commands::asciicast::run(output, cmd),
+        Some(Commands::Qr { text, out }) => commands::qr::run(text, out),
+        Some(Commands::RenderMd { file }) => commands::rendermd::run(file),
+        Some(Commands::ColorPalette) => commands::colorpalette::run(),
+        Some(Commands::Todo { action, text, id }) => commands::todo::run(&action, text, id),
+        Some(Commands::GenPass {
+            length,
+            no_symbols,
+            no_numbers,
+            count,
+        }) => commands::genpass::run(length, no_symbols, no_numbers, count),
         None => {
             commands::help::run(&commands::help::HelpAction::All);
         }

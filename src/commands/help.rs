@@ -153,6 +153,61 @@ fn print_general_help() {
         "[DIR]",
         "Scan lockfiles & system packages for known vulnerabilities",
     );
+    print_cmd(
+        "asciicast",
+        "[-o FILE] [CMD]",
+        "Record terminal session (asciinema wrapper)",
+    );
+    print_cmd(
+        "color-palette",
+        "",
+        "Display ANSI color palette",
+    );
+    print_cmd(
+        "focus",
+        "[--work MINS]",
+        "Pomodoro focus timer with work/break intervals",
+    );
+    print_cmd(
+        "gen-pass",
+        "[-l LEN] [-n N]",
+        "Generate secure random passwords",
+    );
+    print_cmd(
+        "qr",
+        "<TEXT> [-o FILE.png]",
+        "Generate QR code in terminal (optionally PNG)",
+    );
+    print_cmd(
+        "readme-init",
+        "[NAME]",
+        "Generate a README.md template",
+    );
+    print_cmd(
+        "reader",
+        "<FILE>",
+        "Read a file with syntax highlighting",
+    );
+    print_cmd(
+        "render-md",
+        "<FILE>",
+        "Render Markdown directly in the terminal",
+    );
+    print_cmd(
+        "search-docs",
+        "<QUERY>",
+        "Search docs via cheat.sh or tldr",
+    );
+    print_cmd(
+        "speedtest",
+        "",
+        "Measure internet download speed",
+    );
+    print_cmd(
+        "todo",
+        "add|list|done|remove",
+        "Simple local todo list manager",
+    );
 
     println!("\n{}", "FLAGS:".style(style::Theme::HEADER));
     print_cmd("--version", "", "Print version and exit");
@@ -624,6 +679,85 @@ fn print_command_help(command: &str) {
             println!("  packages and advisory pages can be opened in the browser.");
             println!("  Requires a network connection. Scans up to 8 directories deep");
             println!("  and skips node_modules, target/, .git, vendor, dist, build.");
+        }
+        "readme-init" => {
+            println!("{}", "proto readme-init".style(style::Theme::HEADER));
+            println!("  Generate a README.md template.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto readme-init                    Interactive prompts");
+            println!("  proto readme-init my-project         Use given name");
+            println!("  proto readme-init my-project --desc \"...\" --license MIT");
+        }
+        "focus" => {
+            println!("{}", "proto focus".style(style::Theme::HEADER));
+            println!("  Pomodoro focus timer.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto focus                          Defaults (25/5/15 min, 4 cycles)");
+            println!("  proto focus --work 50 --short 10     Custom intervals");
+            println!("  proto focus --cycles 2               Only 2 work cycles");
+        }
+        "speedtest" => {
+            println!("{}", "proto speedtest".style(style::Theme::HEADER));
+            println!("  Measure internet download speed.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto speedtest                      Cloudflare CDN test (~25MB)");
+        }
+        "search-docs" => {
+            println!("{}", "proto search-docs".style(style::Theme::HEADER));
+            println!("  Search documentation via cheat.sh or tldr.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto search-docs \"rust vec\"         Cheat sheet");
+            println!("  proto search-docs \"tar\" --source tldr Tldr page");
+        }
+        "reader" => {
+            println!("{}", "proto reader".style(style::Theme::HEADER));
+            println!("  Read a file with line numbers and basic syntax colors.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto reader README.md");
+        }
+        "asciicast" => {
+            println!("{}", "proto asciicast".style(style::Theme::HEADER));
+            println!("  Record a terminal session. Uses asciinema if installed,\n  falls back to script(1).\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto asciicast                      Open a shell");
+            println!("  proto asciicast -o demo.cast         Output to file");
+            println!("  proto asciicast -- cargo test        Record a command");
+        }
+        "qr" => {
+            println!("{}", "proto qr".style(style::Theme::HEADER));
+            println!("  Generate a QR code in the terminal.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto qr \"https://example.com\"       Terminal output");
+            println!("  proto qr \"hello\" -o qr.png          Also save as PNG");
+        }
+        "render-md" => {
+            println!("{}", "proto render-md".style(style::Theme::HEADER));
+            println!("  Render Markdown with ANSI formatting.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto render-md README.md");
+        }
+        "color-palette" => {
+            println!("{}", "proto color-palette".style(style::Theme::HEADER));
+            println!("  Display standard + 256-color ANSI palette.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto color-palette");
+        }
+        "todo" => {
+            println!("{}", "proto todo".style(style::Theme::HEADER));
+            println!("  Simple local JSON-based todo list.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto todo add \"Fix the bug\"         Add a task");
+            println!("  proto todo list                      Show all tasks");
+            println!("  proto todo done -i 1                 Mark #1 as done");
+            println!("  proto todo remove -i 1               Delete task #1");
+        }
+        "gen-pass" => {
+            println!("{}", "proto gen-pass".style(style::Theme::HEADER));
+            println!("  Generate secure random passwords.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto gen-pass                       Default 20 chars");
+            println!("  proto gen-pass -l 32 -n 5            5 passwords x 32 chars");
+            println!("  proto gen-pass --no-symbols          Alphanumeric only");
         }
         other => {
             println!(
