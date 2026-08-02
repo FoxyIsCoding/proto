@@ -9,6 +9,7 @@ use std::time::Duration;
 const OSV_BATCH: &str = "https://api.osv.dev/v1/querybatch";
 const OSV_VULN: &str = "https://api.osv.dev/v1/vulns";
 const AST_ISSUES: &str = "https://security.archlinux.org/issues/all.json";
+const KEV_URL: &str = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json";
 const OSV_CHUNK: usize = 150;
 
 #[derive(Debug, Clone)]
@@ -37,6 +38,7 @@ struct Vuln {
     fixed: Option<String>,
     url: Option<String>,
     category: Category,
+    kev_ransomware: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -287,6 +289,19 @@ pub fn run(
         }
     }
 
+    if !findings.is_empty() || system_selected {
+        let spin = style::Spinner::new("Checking CISA KEV catalog...");
+        let (kev_set, rw_set) = fetch_kev(&agent);
+        spin.done(&format!("CISA KEV: {} known exploited vulns", kev_set.len()));
+        tag_kev(&mut findings, &kev_set, &rw_set);
+        // Write KEV summary to stdout so it's always visible
+        println!(
+            "  {} CISA KEV: {} known exploited vulns loaded.",
+            style::muted(""),
+            kev_set.len().style(style::Theme::VALUE)
+        );
+    }
+
     println!("{}", style::divider());
     print_findings(&findings);
     print_summary(&findings, &checked);
@@ -311,6 +326,68 @@ fn new_agent() -> ureq::Agent {
         .timeout_connect(Duration::from_secs(10))
         .timeout_read(Duration::from_secs(20))
         .build()
+}
+
+fn fetch_kev(agent: &ureq::Agent) -> (BTreeSet<String>, BTreeSet<String>) {
+    let mut kev = BTreeSet::new();
+    let mut ransomware = BTreeSet::new();
+    let resp = match agent.get(KEV_URL).call() {
+        Ok(r) => r,
+        Err(_) => return (kev, ransomware),
+    };
+    let value: serde_json::Value = match resp.into_json() {
+        Ok(v) => v,
+        Err(_) => return (kev, ransomware),
+    };
+    if let Some(vulns) = value.get("vulnerabilities").and_then(|v| v.as_array()) {
+        for entry in vulns {
+            if let Some(cve) = entry.get("cveID").and_then(|x| x.as_str()) {
+                kev.insert(cve.to_ascii_lowercase());
+                let is_rw = entry
+                    .get("knownRansomwareCampaignUse")
+                    .and_then(|x| x.as_str())
+                    .map(|s| s == "Known")
+                    == Some(true);
+                if is_rw {
+                    ransomware.insert(cve.to_ascii_lowercase());
+                }
+            }
+        }
+    }
+    (kev, ransomware)
+}
+
+fn tag_kev(findings: &mut [Finding], kev: &BTreeSet<String>, ransomware: &BTreeSet<String>) {
+    if kev.is_empty() {
+        return;
+    }
+    for f in findings {
+        for v in &mut f.vulns {
+            let check = |id: &str| {
+                let lower = id.to_ascii_lowercase();
+                if ransomware.contains(&lower) {
+                    return (true, true);
+                }
+                if kev.contains(&lower) {
+                    return (true, false);
+                }
+                (false, false)
+            };
+            let (is_kev, is_rw) = check(&v.id);
+            if is_kev {
+                v.kev_ransomware = is_rw;
+                v.category = Category::Exploited;
+                continue;
+            }
+            if let Some(ref alias) = v.alias {
+                let (is_kev, is_rw) = check(alias);
+                if is_kev {
+                    v.kev_ransomware = is_rw;
+                    v.category = Category::Exploited;
+                }
+            }
+        }
+    }
 }
 
 fn query_key(q: &PackageQuery) -> String {
@@ -883,6 +960,7 @@ fn vuln_details(agent: &ureq::Agent, hits: &BTreeMap<String, Vec<String>>) -> BT
                             fixed: vuln_fixed(&value),
                             url: Some(url),
                             category: classify_vuln(&value),
+                            kev_ransomware: false,
                         },
                     ))
                 }));
@@ -1229,6 +1307,7 @@ fn scan_system_arch(agent: &ureq::Agent) -> (Vec<Finding>, usize, Option<String>
                 fixed: Some(fixed.to_string()),
                 url: Some(avg_url),
                 category: Category::Vulnerable,
+                kev_ransomware: false,
             });
         }
         if !vulns.is_empty() {
@@ -1434,7 +1513,7 @@ fn print_findings(findings: &[Finding]) {
                     .as_deref()
                     .map(sev_style)
                     .unwrap_or_else(|| "[?]".style(style::Theme::MUTED).to_string());
-                let cat = category_badge(v.category);                let alias = v
+                let cat = category_badge(v);                let alias = v
                     .alias
                     .as_ref()
                     .map(|a| format!(" ({})", a.style(style::Theme::MUTED)))
@@ -1507,10 +1586,13 @@ fn print_summary(findings: &[Finding], checked: &[Checked]) {
     }
 }
 
-fn category_badge(c: Category) -> String {
-    match c {
+fn category_badge(v: &Vuln) -> String {
+    if v.kev_ransomware {
+        return format!("[{}] ", "RANSOMWARE".red().bold());
+    }
+    match v.category {
         Category::Infected => format!("[{}] ", "INFECTED".red().bold()),
-        Category::Exploited => format!("[{}] ", "EXPLOITED".red()),
+        Category::Exploited => format!("[{}] ", "KEV".red()),
         Category::Unmaintained => format!("[{}] ", "UNMAINTAINED".yellow()),
         _ => String::new(),
     }
@@ -1519,9 +1601,13 @@ fn category_badge(c: Category) -> String {
 fn print_high_risk(findings: &[Finding]) {
     let mut infected: BTreeSet<String> = BTreeSet::new();
     let mut exploited: BTreeSet<String> = BTreeSet::new();
+    let mut ransomware: BTreeSet<String> = BTreeSet::new();
     let mut critical: BTreeSet<String> = BTreeSet::new();
     for f in findings {
         for v in &f.vulns {
+            if v.kev_ransomware {
+                ransomware.insert(f.package.clone());
+            }
             match v.category {
                 Category::Infected => {
                     infected.insert(f.package.clone());
@@ -1539,12 +1625,16 @@ fn print_high_risk(findings: &[Finding]) {
             }
         }
     }
-    if infected.is_empty() && exploited.is_empty() && critical.is_empty() {
+    if infected.is_empty() && exploited.is_empty() && critical.is_empty() && ransomware.is_empty() {
         return;
     }
     println!("{}", style::divider());
-    println!("  {} HIGH RISK PACKAGES (names only — act on these first):", style::error(""));
+    println!(
+        "  {} HIGH RISK PACKAGES (names only — act on these first):",
+        style::error("")
+    );
     let groups = [
+        ("RANSOMWARE", ransomware),
         ("INFECTED", infected),
         ("EXPLOITED", exploited),
         ("CRITICAL", critical),
