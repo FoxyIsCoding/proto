@@ -581,25 +581,32 @@ fn print_command_help(command: &str) {
             println!("  proto audit-deps                     Interactive (prompts for dir/sources)");
             println!("  proto audit-deps /path/to/project    Scan another directory");
             println!("  proto audit-deps --no-prompt         Audit everything non-interactively");
-            println!("  proto audit-deps --min-severity high Only report High+ findings\n");
+            println!("  proto audit-deps --min-severity high Only report High+ findings");
+            println!("  proto audit-deps --category infected  Only show infected/malware findings\n");
             println!("{}", "FLAGS:".style(style::Theme::HEADER));
             println!("  --no-prompt         Skip prompts (dir default ., all sources, all severities)");
             println!("  --no-open           Never ask to open advisories in the browser");
-            println!("  --min-severity LVL  Filter: all, low, moderate, high, critical\n");
+            println!("  --min-severity LVL  Filter: all, low, moderate, high, critical");
+            println!("  --category CATS     Only report categories: infected, exploited, unmaintained, cve\n");
             println!("{}", "LOCKFILES:".style(style::Theme::HEADER));
-            println!("  package-lock.json, yarn.lock (npm), Cargo.lock (crates.io),");
-            println!("  go.sum (Go), requirements.txt, Pipfile.lock, poetry.lock");
-            println!("  (PyPI), Gemfile.lock (RubyGems), composer.lock (Packagist).\n");
+            println!("  package-lock.json, yarn.lock, pnpm-lock.yaml (npm)");
+            println!("  Cargo.lock (crates.io), go.sum (Go), pom.xml (Maven)");
+            println!("  packages.lock.json (NuGet), pubspec.lock (Pub)");
+            println!("  mix.lock (Hex), Package.resolved (Swift)");
+            println!("  requirements.txt, Pipfile.lock, poetry.lock (PyPI)");
+            println!("  Gemfile.lock (RubyGems), composer.lock (Packagist)");
+            println!("  conan.lock (Conan).\n");
             println!("{}", "SYSTEM:".style(style::Theme::HEADER));
-            println!("  On Arch: compares every installed pacman/AUR package against");
-            println!("  the Arch Security Tracker (ASA/AVG advisories).\n");
+            println!("  Arch: pacman/AUR checks against Arch Security Tracker (ASA/AVG).");
+            println!("  Debian/Ubuntu: dpkg/apt checks via OSV Debian/Ubuntu databases.");
+            println!("  Automatically detected by package manager.\n");
             println!("{}", "DATA:".style(style::Theme::HEADER));
-            println!("  Lockfile versions are checked against Google's OSV API;");
-            println!("  severity + fix versions are pulled per advisory. A data-freshness");
-            println!("  summary shows when each OSV database and the Arch Security Tracker");
-            println!("  were last updated. Interactive mode can open advisory pages in the");
-            println!("  browser. Requires a network connection. Scans up to 6 directories");
-            println!("  deep and skips node_modules, target/, .git, vendor, dist, build.");
+            println!("  Categories: [INFECTED] malware/supply-chain, [EXPLOITED] actively");
+            println!("  exploited, [UNMAINTAINED] abandoned/end-of-life packages.");
+            println!("  A HIGH RISK summary at the end lists infected/exploited/critical");
+            println!("  packages and advisory pages can be opened in the browser.");
+            println!("  Requires a network connection. Scans up to 8 directories deep");
+            println!("  and skips node_modules, target/, .git, vendor, dist, build.");
         }
         other => {
             println!(

@@ -270,6 +270,12 @@ pub enum Commands {
             help = "Minimum severity to report: low, moderate, high, critical, all"
         )]
         min_severity: Option<String>,
+        #[arg(
+            long,
+            value_name = "CATS",
+            help = "Only report categories (comma list): infected, exploited, unmaintained, vulnerable"
+        )]
+        category: Option<String>,
     },
     #[command(
         name = "cert-check",
@@ -393,7 +399,8 @@ pub fn run(cli: Cli) {
             no_prompt,
             no_open,
             min_severity,
-        }) => commands::auditdeps::run(dir, no_prompt, no_open, min_severity),
+            category,
+        }) => commands::auditdeps::run(dir, no_prompt, no_open, min_severity, category),
         Some(Commands::CertCheck { domain }) => commands::cert::run(&domain),
         Some(Commands::DnsLookup { domain }) => commands::dns::run(&domain),
         Some(Commands::LocalS3) => commands::locals3::run(),
