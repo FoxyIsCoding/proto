@@ -216,6 +216,11 @@ pub enum Commands {
         #[arg(long, default_value_t = crate::panel::default_port(), help = "Panel port")]
         port: u16,
     },
+    #[command(about = "Manage the Proto CLI itself (update, uninstall, reset)")]
+    Manage {
+        #[command(subcommand)]
+        action: commands::manage::ManageAction,
+    },
     #[command(about = "Interactive dashboard of listening ports")]
     Ports {
         #[arg(long, help = "Stream to the panel webserver")]
@@ -386,6 +391,7 @@ pub fn run(cli: Cli) {
             serve,
             port,
         }) => commands::killheavy::run(cpu, mem, all, serve, port),
+        Some(Commands::Manage { action }) => commands::manage::run(&action),
         Some(Commands::Ports { serve, port }) => commands::ports::run(serve, port),
         Some(Commands::TreeView { dir, depth, hidden }) => {
             commands::treeview::run(&dir, depth, hidden)

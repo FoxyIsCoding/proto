@@ -18,6 +18,7 @@ pub mod git_extras;
 pub mod help;
 pub mod killheavy;
 pub mod locals3;
+pub mod manage;
 pub mod mc;
 pub mod mc_server;
 pub mod media;

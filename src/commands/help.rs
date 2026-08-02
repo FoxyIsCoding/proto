@@ -124,6 +124,11 @@ fn print_general_help() {
         "Find & kill high CPU/RAM processes",
     );
     print_cmd(
+        "manage",
+        "update|uninstall|reset",
+        "Manage the Proto CLI itself",
+    );
+    print_cmd(
         "ports",
         "[--serve]",
         "Interactive listening-ports dashboard",
@@ -522,6 +527,18 @@ fn print_command_help(command: &str) {
             println!("{}", "FLOW:".style(style::Theme::HEADER));
             println!("  1. Lists top 15 heavy processes (multi-select)");
             println!("  2. Sends SIGTERM, escalates to SIGKILL after ~1s");
+        }
+        "manage" => {
+            println!("{}", "proto manage".style(style::Theme::HEADER));
+            println!("  Manage the Proto CLI itself.\n");
+            println!("{}", "USAGE:".style(style::Theme::HEADER));
+            println!("  proto manage update                 Git pull + cargo build --release");
+            println!("  proto manage uninstall              Remove the proto binary");
+            println!("  proto manage uninstall --purge      Also delete the cloned repo");
+            println!("  proto manage reset                  Remove proto config and state\n");
+            println!("{}", "DETAILS:".style(style::Theme::HEADER));
+            println!("  Uses the compile-time repo path (env! CARGO_MANIFEST_DIR)");
+            println!("  and updates the binary at this process's current_exe().");
         }
         "ports" => {
             println!("{}", "proto ports".style(style::Theme::HEADER));
